@@ -22,6 +22,7 @@ export type Member = {
   id: 'personA' | 'personB'
   name: string
   email?: string
+  userId?: string
 }
 
 export type Household = {
