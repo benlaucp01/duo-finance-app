@@ -125,6 +125,33 @@ body:has(.theme-dream) {
   gap: 10px;
 }
 
+.setup-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(15, 24, 34, 0.52);
+}
+
+.setup-switch button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.setup-switch button.selected {
+  background: var(--lime);
+  color: var(--deep);
+}
+
 .profile-options button {
   display: flex;
   align-items: center;

@@ -81,6 +81,66 @@ begin
 end;
 $$;
 
+create or replace function public.create_household_with_defaults(
+  person_a_name_input text,
+  person_b_name_input text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_household_id uuid;
+  new_invite_code text;
+begin
+  if auth.uid() is null then
+    raise exception 'Please sign in first';
+  end if;
+
+  insert into public.profiles (id, email, display_name)
+  select
+    auth.users.id,
+    coalesce(auth.users.email, ''),
+    coalesce(nullif(trim(person_a_name_input), ''), split_part(coalesce(auth.users.email, ''), '@', 1), 'User')
+  from auth.users
+  where auth.users.id = auth.uid()
+  on conflict (id) do update
+    set email = excluded.email,
+        display_name = excluded.display_name;
+
+  loop
+    new_invite_code := 'HKD-' || upper(substr(md5(random()::text), 1, 4));
+    exit when not exists (
+      select 1 from public.households where invite_code = new_invite_code
+    );
+  end loop;
+
+  insert into public.households (name, invite_code, created_by)
+  values ('我們的帳本', new_invite_code, auth.uid())
+  returning id into new_household_id;
+
+  insert into public.household_members (household_id, user_id, member_key, display_name)
+  values
+    (new_household_id, auth.uid(), 'personA', coalesce(nullif(trim(person_a_name_input), ''), 'Ben')),
+    (new_household_id, null, 'personB', coalesce(nullif(trim(person_b_name_input), ''), 'Emily'));
+
+  insert into public.categories (household_id, name, color)
+  values
+    (new_household_id, '餐飲', '#b7ff16'),
+    (new_household_id, '交通', '#7fdc12'),
+    (new_household_id, '租金', '#8fb8ff'),
+    (new_household_id, '家居', '#64d6b5'),
+    (new_household_id, '寵物', '#ffd6ff'),
+    (new_household_id, '娛樂', '#bfa7ff'),
+    (new_household_id, '購物', '#ffd166'),
+    (new_household_id, '醫療', '#ff8fab'),
+    (new_household_id, '其他', '#94a3b8');
+
+  return new_household_id;
+end;
+$$;
+
 drop policy if exists "members can update their own member row" on public.household_members;
 create policy "members can update their own member row" on public.household_members
   for update using (user_id = auth.uid())

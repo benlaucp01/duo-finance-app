@@ -102,6 +102,7 @@ function App() {
   )
   const [user, setUser] = useState<User | null>(null)
   const [authEmail, setAuthEmail] = useState('')
+  const [setupMode, setSetupMode] = useState<'create' | 'join'>('create')
   const [joinCode, setJoinCode] = useState('')
   const [joinName, setJoinName] = useState('')
   const [data, setData] = useState<AppData | null>(null)
@@ -282,54 +283,83 @@ function App() {
       <main className={`phone-shell theme-${theme}`}>
         <section className="profile-gate">
           <p className="muted-label">First Setup</p>
-          <h1>建立或加入帳本</h1>
-          <p>第一個人建立帳本，第二個人用邀請碼加入。之後雙方資料會寫入 Supabase。</p>
+          <h1>{setupMode === 'create' ? '建立新帳本' : '加入現有帳本'}</h1>
+          <p>
+            {setupMode === 'create'
+              ? '第一個人先建立帳本，完成後把邀請碼交給對方。'
+              : '如果對方已經建立帳本，請輸入對方給你的邀請碼。'}
+          </p>
 
-          <form onSubmit={handleCreateHousehold}>
-            <label>
-              你的顯示名稱
-              <input
-                value={personAName}
-                onChange={(event) => setPersonAName(event.target.value)}
-                placeholder="例如：Ben"
-              />
-            </label>
-            <label>
-              對方顯示名稱
-              <input
-                value={personBName}
-                onChange={(event) => setPersonBName(event.target.value)}
-                placeholder="例如：Jamie"
-              />
-            </label>
-            <button className="primary-action" type="submit">
-              <Plus size={18} />
-              建立新帳本
+          <div className="setup-switch">
+            <button
+              type="button"
+              className={setupMode === 'create' ? 'selected' : ''}
+              onClick={() => {
+                setSetupMode('create')
+                setStatusMessage('')
+              }}
+            >
+              建立
             </button>
-          </form>
+            <button
+              type="button"
+              className={setupMode === 'join' ? 'selected' : ''}
+              onClick={() => {
+                setSetupMode('join')
+                setStatusMessage('')
+              }}
+            >
+              加入
+            </button>
+          </div>
 
-          <form onSubmit={handleJoinHousehold}>
-            <label>
-              邀請碼
-              <input
-                value={joinCode}
-                onChange={(event) => setJoinCode(event.target.value)}
-                placeholder="例如：HKD-2486"
-              />
-            </label>
-            <label>
-              你的顯示名稱
-              <input
-                value={joinName}
-                onChange={(event) => setJoinName(event.target.value)}
-                placeholder="例如：Jamie"
-              />
-            </label>
-            <button className="secondary-action" type="submit">
-              <Copy size={18} />
-              加入現有帳本
-            </button>
-          </form>
+          {setupMode === 'create' ? (
+            <form onSubmit={handleCreateHousehold}>
+              <label>
+                你的顯示名稱
+                <input
+                  value={personAName}
+                  onChange={(event) => setPersonAName(event.target.value)}
+                  placeholder="例如：Ben"
+                />
+              </label>
+              <label>
+                對方顯示名稱
+                <input
+                  value={personBName}
+                  onChange={(event) => setPersonBName(event.target.value)}
+                  placeholder="例如：Emily"
+                />
+              </label>
+              <button className="primary-action" type="submit">
+                <Plus size={18} />
+                建立新帳本
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleJoinHousehold}>
+              <label>
+                邀請碼
+                <input
+                  value={joinCode}
+                  onChange={(event) => setJoinCode(event.target.value)}
+                  placeholder="例如：HKD-2486"
+                />
+              </label>
+              <label>
+                你的顯示名稱
+                <input
+                  value={joinName}
+                  onChange={(event) => setJoinName(event.target.value)}
+                  placeholder="例如：Emily"
+                />
+              </label>
+              <button className="secondary-action" type="submit">
+                <Copy size={18} />
+                加入現有帳本
+              </button>
+            </form>
+          )}
           {statusMessage && <p className="status-message">{statusMessage}</p>}
         </section>
       </main>

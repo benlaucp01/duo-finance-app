@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import type { AppData, Category, CurrencyCode, Expense, Household, Member, SplitMode } from '../types'
-import { demoData, defaultCategories } from './seed'
+import { demoData } from './seed'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 const storageKey = 'duo-finance-data'
@@ -269,47 +269,14 @@ export async function createCloudHousehold(
 
   await ensureProfile(user)
 
-  const { data: household, error: householdError } = await client
-    .from('households')
-    .insert({
-      name: '我們的帳本',
-      invite_code: generateInviteCode(),
-      created_by: user.id,
-    })
-    .select('id')
-    .single()
+  const { data: householdId, error } = await client.rpc('create_household_with_defaults', {
+    person_a_name_input: personAName || 'Ben',
+    person_b_name_input: personBName || 'Jamie',
+  })
 
-  if (householdError) throw householdError
+  if (error) throw error
 
-  const householdId = household.id as string
-  const { error: membersError } = await client.from('household_members').insert([
-    {
-      household_id: householdId,
-      user_id: user.id,
-      member_key: 'personA',
-      display_name: personAName || 'Ben',
-    },
-    {
-      household_id: householdId,
-      user_id: null,
-      member_key: 'personB',
-      display_name: personBName || 'Jamie',
-    },
-  ])
-
-  if (membersError) throw membersError
-
-  const { error: categoriesError } = await client.from('categories').insert(
-    defaultCategories.map((category) => ({
-      household_id: householdId,
-      name: category.name,
-      color: category.color,
-    })),
-  )
-
-  if (categoriesError) throw categoriesError
-
-  return loadCloudHousehold(householdId)
+  return loadCloudHousehold(householdId as string)
 }
 
 export async function joinCloudHousehold(inviteCode: string, displayName: string) {
