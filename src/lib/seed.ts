@@ -5,6 +5,7 @@ export const defaultCategories: Category[] = [
   { id: 'transport', name: '交通', color: '#0ea5e9' },
   { id: 'rent', name: '租金', color: '#8b5cf6' },
   { id: 'home', name: '家居', color: '#10b981' },
+  { id: 'pet', name: '寵物', color: '#14b8a6' },
   { id: 'fun', name: '娛樂', color: '#ec4899' },
   { id: 'shopping', name: '購物', color: '#f59e0b' },
   { id: 'medical', name: '醫療', color: '#ef4444' },
@@ -18,7 +19,7 @@ export const demoData: AppData = {
     inviteCode: 'HKD-2486',
     baseCurrency: 'HKD',
     members: [
-      { id: 'personA', name: 'Alex', email: 'alex@example.com' },
+      { id: 'personA', name: 'Ben', email: 'ben@example.com' },
       { id: 'personB', name: 'Jamie', email: 'jamie@example.com' },
     ],
   },
