@@ -59,6 +59,12 @@ const categoryIconRules: Array<[string[], string]> = [
   [['rent', '\u79df'], 'rent'],
   [['home', '\u5bb6\u5c45', '\u5c4b\u4f01'], 'home'],
   [['bill', '\u5e33\u55ae', '\u6c34\u96fb', '\u96fb\u8cbb'], 'bill'],
+  [['water', '\u6c34\u8cbb'], 'water'],
+  [['electricity', '\u96fb\u8cbb'], 'electricity'],
+  [['gas', '\u7164\u6c23'], 'gas'],
+  [['credit-card', '\u4fe1\u7528\u5361'], 'credit-card'],
+  [['internet', '\u4e0a\u7db2', 'wifi'], 'internet'],
+  [['insurance', '\u4fdd\u96aa'], 'insurance'],
   [['pet', '\u5bf5\u7269'], 'pet'],
   [['shopping', '\u8cfc\u7269'], 'shopping'],
   [['clothes', '\u8863\u7269'], 'clothes'],
@@ -522,6 +528,15 @@ export async function deleteCloudCategory(categoryId: string) {
   }
 }
 
+export async function updateCloudCategoryIcon(categoryId: string, icon: string) {
+  const client = requireSupabase()
+  const { error } = await client.from('categories').update({ icon }).eq('id', categoryId)
+
+  if (error) {
+    throw error
+  }
+}
+
 export async function updateCloudSettlementRatio(
   householdId: string,
   personA: number,
@@ -601,6 +616,15 @@ export function addCategory(data: AppData, category: Category): AppData {
   return {
     ...data,
     categories: [...data.categories, category],
+  }
+}
+
+export function updateCategoryIcon(data: AppData, categoryId: string, icon: string): AppData {
+  return {
+    ...data,
+    categories: data.categories.map((category) => (
+      category.id === categoryId ? { ...category, icon } : category
+    )),
   }
 }
 

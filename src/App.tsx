@@ -2,12 +2,16 @@ import {
   CalendarDays,
   Car,
   Check,
+  ChevronDown,
   CircleDollarSign,
   Clapperboard,
   Cloud,
   Coins,
   Copy,
+  CreditCard,
+  Droplets,
   Dumbbell,
+  Flame,
   Fuel,
   Gift,
   GraduationCap,
@@ -36,6 +40,8 @@ import {
   UserRound,
   Utensils,
   WalletCards,
+  Wifi,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -69,6 +75,8 @@ import {
   sendMagicLink,
   signOut,
   subscribeToHousehold,
+  updateCategoryIcon,
+  updateCloudCategoryIcon,
   updateCloudExpense,
   updateCloudSettlementRatio,
   updateSettlementRatio,
@@ -80,7 +88,15 @@ import type { AppData, Category, CurrencyCode, Expense, Member, SplitMode } from
 type Tab = 'overview' | 'add' | 'records' | 'categories' | 'settings'
 type ThemeName = 'neon' | 'dream' | 'white'
 type RecordFilter = Member['id'] | 'all'
-type CalculatorTarget = 'quick' | 'expense' | 'repeat'
+type CalculatorTarget = 'quick' | 'expense' | 'repeat' | 'fixed'
+type FixedExpenseTemplate = {
+  id: string
+  title: string
+  amount: number
+  categoryId: string
+  payerId: Member['id']
+  splitMode: SplitMode
+}
 
 type ExpenseFormState = {
   title: string
@@ -97,6 +113,9 @@ type ExpenseFormState = {
 
 const profileStorageKey = 'duo-finance-current-profile'
 const themeStorageKey = 'duo-finance-theme'
+const fixedExpensesStorageKey = 'duo-finance-fixed-expenses'
+const fixedExpenseAppliedStorageKey = 'duo-finance-fixed-expense-applied'
+const quickCategoriesStorageKey = 'duo-finance-quick-categories'
 
 const initialForm: ExpenseFormState = {
   title: '',
@@ -142,6 +161,17 @@ const iconOptions = [
   { id: 'reward', label: '獎勵' },
   { id: 'other', label: '其他' },
 ]
+
+const extraIconOptions = [
+  { id: 'water', label: '水費' },
+  { id: 'electricity', label: '電費' },
+  { id: 'gas', label: '煤氣' },
+  { id: 'credit-card', label: '信用卡' },
+  { id: 'internet', label: '上網' },
+  { id: 'insurance', label: '保險' },
+]
+
+const allIconOptions = [...iconOptions, ...extraIconOptions]
 
 const categoryNameOptions = [
   '餐飲',
@@ -197,6 +227,12 @@ function App() {
   const [quickTitle, setQuickTitle] = useState('')
   const [quickAmount, setQuickAmount] = useState('')
   const [quickCategoryId, setQuickCategoryId] = useState('food')
+  const [quickCategoryIds, setQuickCategoryIds] = useState<string[]>(() => loadQuickCategoryIds())
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseTemplate[]>(() => loadFixedExpenses())
+  const [fixedTitle, setFixedTitle] = useState('')
+  const [fixedAmount, setFixedAmount] = useState('')
+  const [fixedCategoryId, setFixedCategoryId] = useState('rent')
+  const [isFixedExpenseOpen, setIsFixedExpenseOpen] = useState(false)
   const [repeatDraft, setRepeatDraft] = useState<{ expense: Expense; amount: string } | null>(null)
   const [recordFilter, setRecordFilter] = useState<RecordFilter>('all')
   const [isQuickSaving, setIsQuickSaving] = useState(false)
@@ -209,14 +245,29 @@ function App() {
   const [ratioPersonA, setRatioPersonA] = useState('50')
   const [calculator, setCalculator] = useState<{ target: CalculatorTarget; expression: string } | null>(null)
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false)
+  const [isQuickCategoryPickerOpen, setIsQuickCategoryPickerOpen] = useState(false)
   const [isExpenseCategoryFormOpen, setIsExpenseCategoryFormOpen] = useState(false)
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false)
+  const [editingCategoryIconId, setEditingCategoryIconId] = useState<string | null>(null)
   const [isRemovingCategories, setIsRemovingCategories] = useState(false)
+  const fixedAutoRunKey = useRef('')
   const longPressTimer = useRef<number | null>(null)
 
   useEffect(() => {
     localStorage.setItem(themeStorageKey, theme)
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem(fixedExpensesStorageKey, JSON.stringify(fixedExpenses))
+  }, [fixedExpenses])
+
+  useEffect(() => {
+    localStorage.setItem(quickCategoriesStorageKey, JSON.stringify(quickCategoryIds))
+  }, [quickCategoryIds])
+
+  useEffect(() => {
+    closeTemporaryPanels()
+  }, [activeTab])
 
   useEffect(() => {
     let isMounted = true
@@ -294,6 +345,14 @@ function App() {
       if (refreshed) await saveLocalAppData(refreshed)
     })
   }, [cloudMode, data?.household.id, user])
+
+  useEffect(() => {
+    if (!data || fixedExpenses.length === 0) return
+    const runKey = `${data.household.id}-${currentMonthInputValue()}-${fixedExpenses.map((item) => item.id).join(',')}`
+    if (fixedAutoRunKey.current === runKey) return
+    fixedAutoRunKey.current = runKey
+    void autoApplyFixedExpenses(data, fixedExpenses)
+  }, [data, fixedExpenses])
 
   const monthExpenses = useMemo(() => (data ? expensesForMonth(data.expenses, month) : []), [data, month])
   const settlement = useMemo(
@@ -412,9 +471,29 @@ function App() {
   const personBPercentage = paidTotal > 0 ? 100 - personAPercentage : 50
   const recentTemplates = [...appData.expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6)
   const recordExpenses = monthExpenses.filter((expense) => recordFilter === 'all' || expense.payerId === recordFilter)
+  const quickCategories = buildQuickCategories(appData.categories, appData.expenses, quickCategoryIds)
 
   function updateData(next: AppData) {
     setData(next)
+  }
+
+  function closeTemporaryPanels() {
+    setIsCategoryFormOpen(false)
+    setIsQuickCategoryPickerOpen(false)
+    setIsExpenseCategoryFormOpen(false)
+    setIsCategoryMenuOpen(false)
+    setEditingCategoryIconId(null)
+    setCalculator(null)
+  }
+
+  function switchTab(tab: Tab) {
+    closeTemporaryPanels()
+    setActiveTab(tab)
+  }
+
+  function rememberQuickCategory(categoryId: string) {
+    setQuickCategoryId(categoryId)
+    setQuickCategoryIds((current) => [categoryId, ...current.filter((id) => id !== categoryId)].slice(0, 7))
   }
 
   function categoryName(categoryId: string) {
@@ -435,7 +514,7 @@ function App() {
   function selectProfile(id: Member['id']) {
     setCurrentProfileId(id)
     localStorage.setItem(profileStorageKey, id)
-    setActiveTab('overview')
+    switchTab('overview')
     setStatusMessage('')
   }
 
@@ -517,11 +596,13 @@ function App() {
     setIsSaving(true)
     try {
       const existing = editingExpenseId ? appData.expenses.find((expense) => expense.id === editingExpenseId) : undefined
-      await saveExpense(await buildExpenseFromForm(existing))
+      const expense = await buildExpenseFromForm(existing)
+      await saveExpense(expense)
+      rememberQuickCategory(expense.categoryId)
       setForm({ ...initialForm, date: form.date, categoryId: form.categoryId })
       setEditingExpenseId(null)
       setStatusMessage(editingExpenseId ? '支出已更新。' : '支出已儲存。')
-      setActiveTab('overview')
+      switchTab('overview')
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : '儲存支出失敗。')
     } finally {
@@ -529,7 +610,7 @@ function App() {
     }
   }
 
-  async function addQuickExpense(title: string, amount: number, categoryId: string, source?: Expense) {
+  async function addQuickExpense(title: string, amount: number, categoryId: string, source?: Expense, overrides?: Partial<Pick<Expense, 'date' | 'payerId'>>) {
     if (!currentProfile) throw new Error('請先選擇你的身份。')
     const hkdAmount = roundMoney(amount)
     const splitMode = source?.splitMode ?? 'equal'
@@ -537,13 +618,13 @@ function App() {
     const expense: Expense = {
       id: crypto.randomUUID(),
       householdId: appData.household.id,
-      date: todayInputValue(),
+      date: overrides?.date ?? todayInputValue(),
       title: title || categoryName(categoryId),
       originalAmount: amount,
       originalCurrency: 'HKD',
       exchangeRateToHkd: 1,
       hkdAmount,
-      payerId: currentProfile.id,
+      payerId: overrides?.payerId ?? currentProfile.id,
       categoryId,
       splitMode,
       split,
@@ -559,13 +640,104 @@ function App() {
     }
   }
 
+  function handleAddFixedExpense(event: FormEvent) {
+    event.preventDefault()
+    const amount = Number(fixedAmount)
+    if (!fixedTitle.trim() || !amount || amount <= 0 || !currentProfile) return
+    setFixedExpenses((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        title: fixedTitle.trim(),
+        amount,
+        categoryId: fixedCategoryId,
+        payerId: currentProfile.id,
+        splitMode: 'equal',
+      },
+    ])
+    setFixedTitle('')
+    setFixedAmount('')
+    setStatusMessage('固定支出已新增。')
+  }
+
+  async function applyFixedExpense(template: FixedExpenseTemplate) {
+    setIsQuickSaving(true)
+    try {
+      await addQuickExpense(template.title, template.amount, template.categoryId, undefined, {
+        date: firstDayOfMonth(month),
+        payerId: template.payerId,
+      })
+      setStatusMessage(`已加入本月固定支出「${template.title}」。`)
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '加入固定支出失敗。')
+    } finally {
+      setIsQuickSaving(false)
+    }
+  }
+
+  function deleteFixedExpense(templateId: string) {
+    setFixedExpenses((current) => current.filter((template) => template.id !== templateId))
+  }
+
+  async function autoApplyFixedExpenses(currentData: AppData, templates: FixedExpenseTemplate[]) {
+    if (!currentProfile || templates.length === 0) return
+    const currentMonth = currentMonthInputValue()
+    const applied = loadFixedExpenseApplied()
+    const dueTemplates = templates.filter((template) => !applied.includes(fixedExpenseApplyKey(currentData.household.id, template.id, currentMonth)))
+    if (dueTemplates.length === 0) return
+
+    const firstDay = firstDayOfMonth(currentMonth)
+    const createdExpenses = dueTemplates.map((template) => {
+      const hkdAmount = roundMoney(template.amount)
+      return {
+        id: crypto.randomUUID(),
+        householdId: currentData.household.id,
+        date: firstDay,
+        title: template.title,
+        originalAmount: template.amount,
+        originalCurrency: 'HKD',
+        exchangeRateToHkd: 1,
+        hkdAmount,
+        payerId: currentData.household.members.some((member) => member.id === template.payerId) ? template.payerId : 'personA',
+        categoryId: template.categoryId,
+        splitMode: template.splitMode,
+        split: buildSplit(template.splitMode, hkdAmount, 0),
+        note: '固定支出',
+        rateSource: 'hkd',
+        createdAt: new Date().toISOString(),
+      } satisfies Expense
+    })
+
+    try {
+      if (cloudMode) {
+        for (const expense of createdExpenses) {
+          await insertCloudExpense(expense)
+        }
+        await refreshCloudData()
+      } else {
+        updateData(createdExpenses.reduce((nextData, expense) => upsertExpense(nextData, expense), currentData))
+      }
+      saveFixedExpenseApplied([
+        ...applied,
+        ...dueTemplates.map((template) => fixedExpenseApplyKey(currentData.household.id, template.id, currentMonth)),
+      ])
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '自動加入固定支出失敗。')
+    }
+  }
+
   async function handleQuickAdd(event: FormEvent) {
     event.preventDefault()
-    const amount = Number(quickAmount)
+    await submitQuickAdd()
+  }
+
+  async function submitQuickAdd(amountText = quickAmount) {
+    const amount = Number(amountText)
     if (!amount || amount <= 0) return setStatusMessage('請輸入有效金額。')
     setIsQuickSaving(true)
     try {
       await addQuickExpense(quickTitle.trim(), amount, quickCategoryId)
+      rememberQuickCategory(quickCategoryId)
       setQuickTitle('')
       setQuickAmount('')
       setStatusMessage('已快速新增支出。')
@@ -583,6 +755,7 @@ function App() {
     setIsQuickSaving(true)
     try {
       await addQuickExpense(repeatDraft.expense.title, amount, repeatDraft.expense.categoryId, repeatDraft.expense)
+      rememberQuickCategory(repeatDraft.expense.categoryId)
       setRepeatDraft(null)
       setStatusMessage('已重複加入支出。')
     } catch (error) {
@@ -600,14 +773,23 @@ function App() {
     if (target === 'quick') setQuickAmount(value)
     if (target === 'expense') setForm((current) => ({ ...current, amount: value }))
     if (target === 'repeat') setRepeatDraft((current) => (current ? { ...current, amount: value } : current))
+    if (target === 'fixed') setFixedAmount(value)
   }
 
-  function handleCalculatorPress(key: string) {
+  async function handleCalculatorPress(key: string) {
     if (!calculator) return
 
     if (key === 'OK') {
       const result = calculateExpression(calculator.expression)
-      if (result !== null) setCalculatorAmount(calculator.target, formatCalculatorValue(result))
+      if (result !== null) {
+        const value = formatCalculatorValue(result)
+        setCalculatorAmount(calculator.target, value)
+        if (calculator.target === 'quick') {
+          setCalculator(null)
+          await submitQuickAdd(value)
+          return
+        }
+      }
       setCalculator(null)
       return
     }
@@ -635,6 +817,13 @@ function App() {
       return
     }
 
+    if (key === 'backspace') {
+      const value = calculator.expression.slice(0, -1)
+      setCalculator({ ...calculator, expression: value })
+      setCalculatorAmount(calculator.target, value)
+      return
+    }
+
     const value = `${calculator.expression}${key}`
     setCalculator({ ...calculator, expression: value })
     if (isPlainNumber(value)) setCalculatorAmount(calculator.target, value)
@@ -654,7 +843,7 @@ function App() {
       manualRate: String(expense.exchangeRateToHkd),
       useManualRate: expense.rateSource === 'manual',
     })
-    setActiveTab('add')
+    switchTab('add')
   }
 
   async function handleDeleteExpense(expenseId: string) {
@@ -759,6 +948,21 @@ function App() {
     }
   }
 
+  async function handleUpdateCategoryIcon(category: Category, icon: string) {
+    try {
+      if (cloudMode) {
+        await updateCloudCategoryIcon(category.id, icon)
+        await refreshCloudData()
+      } else {
+        updateData(updateCategoryIcon(appData, category.id, icon))
+      }
+      setEditingCategoryIconId(null)
+      setStatusMessage(`已更新「${category.name}」圖示。`)
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '更新分類圖示失敗。')
+    }
+  }
+
   async function handleSaveSettlementRatio(event: FormEvent) {
     event.preventDefault()
     const personAValue = Math.min(Math.max(Number(ratioPersonA), 0), 100)
@@ -816,16 +1020,17 @@ function App() {
           <CalendarDays size={16} />
           <input aria-label="選擇月份" type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
         </label>
-        <button type="button" onClick={() => setActiveTab('add')} className="quick-add"><Plus size={18} />新增</button>
+        <button type="button" onClick={() => switchTab('add')} className="quick-add"><Plus size={18} />新增</button>
       </section>
 
       {activeTab === 'overview' && (
         <section className="screen-stack">
           <form className="quick-entry panel" onSubmit={handleQuickAdd}>
+            <div className="quick-entry-title"><Plus size={17} /><h2>快速加入支出</h2></div>
             <div className="quick-category-strip">
               <div className="quick-categories" aria-label="快速分類">
-              {appData.categories.slice(0, 7).map((category) => (
-                <button key={category.id} type="button" className={quickCategoryId === category.id ? 'selected' : ''} onClick={() => setQuickCategoryId(category.id)}>
+              {quickCategories.map((category) => (
+                <button key={category.id} type="button" className={quickCategoryId === category.id ? 'selected' : ''} onClick={() => rememberQuickCategory(category.id)}>
                   <span className="category-icon"><CategoryIcon category={category} /></span>
                   <span>{category.name}</span>
                 </button>
@@ -835,9 +1040,7 @@ function App() {
                 type="button"
                 className="quick-category-add"
                 onClick={() => {
-                  setNewCategory('')
-                  setNewCategoryIcon('food')
-                  setIsCategoryFormOpen(true)
+                  setIsQuickCategoryPickerOpen(true)
                 }}
               >
                 <span className="category-icon"><Plus size={20} /></span>
@@ -848,16 +1051,16 @@ function App() {
               <input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="項目，例如：麥當勞晚餐" aria-label="快速輸入項目" />
               <div className="quick-input-row">
                 <span>HK$</span>
-                <input type="number" min="0" step="0.01" value={quickAmount} onFocus={() => openCalculator('quick', quickAmount)} onChange={(event) => setQuickAmount(event.target.value)} placeholder="金額" aria-label="快速輸入金額" />
+                <input readOnly inputMode="none" value={quickAmount} onFocus={() => openCalculator('quick', quickAmount)} onClick={() => openCalculator('quick', quickAmount)} placeholder="金額" aria-label="快速輸入金額" />
                 <button type="submit" disabled={isQuickSaving}><Plus size={18} /></button>
               </div>
-              {calculator?.target === 'quick' && <CalculatorPad expression={calculator.expression} onPress={handleCalculatorPress} />}
+              {calculator?.target === 'quick' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
             </div>
           </form>
 
           {isCategoryFormOpen && (
-            <div className="category-modal-backdrop" role="dialog" aria-modal="true" aria-label="新增快速分類">
-              <form className="panel compact-form category-modal" onSubmit={handleAddCategory}>
+            <div className="category-modal-backdrop" role="dialog" aria-modal="true" aria-label="新增快速分類" onClick={() => setIsCategoryFormOpen(false)}>
+              <form className="panel compact-form category-modal" onSubmit={handleAddCategory} onClick={(event) => event.stopPropagation()}>
                 <div className="panel-title"><Plus size={18} /><h2>新增分類</h2></div>
                 <label>分類名稱<input id="quick-new-category-name" value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="例如：咖啡、早餐、保險" autoFocus /></label>
                 <div className="name-picker" aria-label="分類名稱建議">
@@ -874,7 +1077,7 @@ function App() {
                 </div>
                 <p className="picker-label">選擇圖示</p>
                 <div className="icon-picker">
-                  {iconOptions.map((option) => (
+                  {allIconOptions.map((option) => (
                     <button
                       key={option.id}
                       type="button"
@@ -895,6 +1098,31 @@ function App() {
             </div>
           )}
 
+          {isQuickCategoryPickerOpen && (
+            <div className="category-modal-backdrop" role="dialog" aria-modal="true" aria-label="選擇快捷分類" onClick={() => setIsQuickCategoryPickerOpen(false)}>
+              <section className="panel compact-form category-modal" onClick={(event) => event.stopPropagation()}>
+                <div className="panel-title"><Coins size={18} /><h2>選擇快捷分類</h2></div>
+                <div className="category-grid quick-picker-grid">
+                  {appData.categories.map((category) => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      className="category-tile"
+                      onClick={() => {
+                        rememberQuickCategory(category.id)
+                        setIsQuickCategoryPickerOpen(false)
+                      }}
+                    >
+                      <span className="category-icon" style={{ background: category.color }}><CategoryIcon category={category} /></span>
+                      <strong>{category.name}</strong>
+                    </button>
+                  ))}
+                </div>
+                <button className="secondary-action" type="button" onClick={() => setIsQuickCategoryPickerOpen(false)}>取消</button>
+              </section>
+            </div>
+          )}
+
           {recentTemplates.length > 0 && (
             <section className="panel quick-repeat-panel">
               <div className="panel-title"><Coins size={18} /><h2>最近支出</h2></div>
@@ -909,8 +1137,8 @@ function App() {
               {repeatDraft && (
                 <div className="repeat-confirm">
                   <strong>重複加入：{repeatDraft.expense.title}</strong>
-                  <input type="number" min="0" step="0.01" value={repeatDraft.amount} onFocus={() => openCalculator('repeat', repeatDraft.amount)} onChange={(event) => setRepeatDraft({ ...repeatDraft, amount: event.target.value })} />
-                  {calculator?.target === 'repeat' && <CalculatorPad expression={calculator.expression} onPress={handleCalculatorPress} />}
+                  <input readOnly inputMode="none" value={repeatDraft.amount} onFocus={() => openCalculator('repeat', repeatDraft.amount)} onClick={() => openCalculator('repeat', repeatDraft.amount)} />
+                  {calculator?.target === 'repeat' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
                   <div className="confirm-actions">
                     <button type="button" onClick={() => setRepeatDraft(null)}>取消</button>
                     <button type="button" onClick={() => void handleConfirmRepeat()}>確認加入</button>
@@ -964,10 +1192,10 @@ function App() {
             <div className="payer-lock"><UserRound size={17} />付款人：{editingExpenseId ? appData.household.members.find((member) => member.id === appData.expenses.find((expense) => expense.id === editingExpenseId)?.payerId)?.name : currentProfile.name}</div>
             <label className="hero-input">項目<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" /></label>
             <div className="amount-currency-row">
-              <label>金額<input type="number" min="0" step="0.01" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="0.00" /></label>
+              <label>金額<input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" /></label>
               <label>貨幣<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })}>{currencies.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
             </div>
-            {calculator?.target === 'expense' && <CalculatorPad expression={calculator.expression} onPress={handleCalculatorPress} />}
+            {calculator?.target === 'expense' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
             <label>日期<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
             {form.currency !== 'HKD' && <label className="toggle-line"><input type="checkbox" checked={form.useManualRate} onChange={(event) => setForm({ ...form, useManualRate: event.target.checked })} />使用手動匯率</label>}
             {form.currency !== 'HKD' && form.useManualRate && <label>1 {form.currency} 等於多少 HKD<input type="number" min="0" step="0.0001" value={form.manualRate} onChange={(event) => setForm({ ...form, manualRate: event.target.value })} placeholder="例如：0.052" /></label>}
@@ -992,7 +1220,7 @@ function App() {
                   {categoryNameOptions.map((name) => <button key={name} type="button" className={newCategory === name ? 'selected' : ''} onClick={() => setNewCategory(name)}>{name}</button>)}
                 </div>
                 <div className="icon-picker compact-icons">
-                  {iconOptions.map((option) => (
+                  {allIconOptions.map((option) => (
                     <button key={option.id} type="button" className={newCategoryIcon === option.id ? 'selected' : ''} onClick={() => setNewCategoryIcon(option.id)} aria-label={option.label} title={option.label}>
                       <CategoryIcon category={{ id: option.id, name: option.label, color: '', icon: option.id }} />
                     </button>
@@ -1016,6 +1244,43 @@ function App() {
 
       {activeTab === 'records' && (
         <section className="screen-stack">
+          <section className="panel fixed-expense-panel">
+            <button
+              type="button"
+              className="fixed-expense-toggle"
+              onClick={() => setIsFixedExpenseOpen((current) => !current)}
+              aria-expanded={isFixedExpenseOpen}
+            >
+              <span><Receipt size={18} /><strong>固定支出</strong></span>
+              <small>{fixedExpenses.length > 0 ? `${fixedExpenses.length} 項，每月 1 號自動加入` : '未有固定支出'}</small>
+              <ChevronDown size={20} className={isFixedExpenseOpen ? 'is-open' : ''} />
+            </button>
+            {isFixedExpenseOpen && (
+              <div className="fixed-expense-body">
+                <form className="fixed-expense-form" onSubmit={handleAddFixedExpense}>
+                  <input value={fixedTitle} onChange={(event) => setFixedTitle(event.target.value)} placeholder="例如：租金、上網費" />
+                  <div className="amount-currency-row">
+                    <input readOnly inputMode="none" value={fixedAmount} onFocus={() => openCalculator('fixed', fixedAmount)} onClick={() => openCalculator('fixed', fixedAmount)} placeholder="HK$ 金額" />
+                    <select value={fixedCategoryId} onChange={(event) => setFixedCategoryId(event.target.value)}>
+                      {appData.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                    </select>
+                  </div>
+                  {calculator?.target === 'fixed' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
+                  <button className="primary-action" type="submit"><Plus size={16} />新增固定支出</button>
+                </form>
+                <div className="fixed-expense-list">
+                  {fixedExpenses.length === 0 ? <p className="empty-text">未有固定支出。</p> : fixedExpenses.map((template) => (
+                    <article key={template.id} className="fixed-expense-item">
+                      <span>{template.title}<small>{categoryName(template.categoryId)}</small></span>
+                      <b>{formatMoney(template.amount)}</b>
+                      <button type="button" onClick={() => void applyFixedExpense(template)}>加入本月</button>
+                      <button type="button" className="ghost-icon" onClick={() => deleteFixedExpense(template.id)}><Trash2 size={16} /></button>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
           <section className="panel">
             <div className="panel-title"><List size={18} /><h2>雙方支出明細</h2></div>
             <div className="record-filter">
@@ -1072,6 +1337,7 @@ function App() {
                   className={`category-tile ${isRemovingCategories ? 'is-removing' : ''}`}
                   onClick={() => {
                     if (isRemovingCategories) void requestDeleteCategory(category)
+                    else setEditingCategoryIconId(category.id)
                   }}
                   onMouseDown={() => beginCategoryLongPress(category)}
                   onMouseUp={cancelCategoryLongPress}
@@ -1087,6 +1353,31 @@ function App() {
               <button type="button" className="category-tile add-tile" onClick={() => setIsCategoryFormOpen(true)}><span className="category-icon"><Plus size={18} /></span><strong>新增</strong></button>
             </div>
           </section>
+          {editingCategoryIconId && (
+            <section className="panel compact-form">
+              <div className="panel-title"><Pencil size={18} /><h2>更改分類圖示</h2></div>
+              <p className="picker-label">{categoryName(editingCategoryIconId)}</p>
+              <div className="icon-picker">
+                {allIconOptions.map((option) => {
+                  const category = appData.categories.find((item) => item.id === editingCategoryIconId)
+                  if (!category) return null
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={category.icon === option.id ? 'selected' : ''}
+                      onClick={() => void handleUpdateCategoryIcon(category, option.id)}
+                      aria-label={option.label}
+                      title={option.label}
+                    >
+                      <CategoryIcon category={{ id: option.id, name: option.label, color: '', icon: option.id }} />
+                    </button>
+                  )
+                })}
+              </div>
+              <button className="secondary-action" type="button" onClick={() => setEditingCategoryIconId(null)}>取消</button>
+            </section>
+          )}
           {isCategoryFormOpen && (
             <form className="panel compact-form" onSubmit={handleAddCategory}>
               <div className="panel-title"><Plus size={18} /><h2>新增分類</h2></div>
@@ -1105,7 +1396,7 @@ function App() {
               </div>
               <p className="picker-label">選擇圖示</p>
               <div className="icon-picker">
-                {iconOptions.map((option) => (
+                {allIconOptions.map((option) => (
                   <button
                     key={option.id}
                     type="button"
@@ -1187,11 +1478,11 @@ function App() {
       )}
 
       <nav className="bottom-nav" aria-label="底部導覽">
-        <button type="button" className={activeTab === 'overview' ? 'is-active' : ''} onClick={() => setActiveTab('overview')}><Home size={19} />總覽</button>
-        <button type="button" className={activeTab === 'add' ? 'is-active' : ''} onClick={() => setActiveTab('add')}><Plus size={19} />新增</button>
-        <button type="button" className={activeTab === 'records' ? 'is-active' : ''} onClick={() => setActiveTab('records')}><List size={19} />明細</button>
-        <button type="button" className={activeTab === 'categories' ? 'is-active' : ''} onClick={() => setActiveTab('categories')}><Coins size={19} />分類</button>
-        <button type="button" className={activeTab === 'settings' ? 'is-active' : ''} onClick={() => setActiveTab('settings')}><Settings size={19} />設定</button>
+        <button type="button" className={activeTab === 'overview' ? 'is-active' : ''} onClick={() => switchTab('overview')}><Home size={19} />總覽</button>
+        <button type="button" className={activeTab === 'add' ? 'is-active' : ''} onClick={() => switchTab('add')}><Plus size={19} />新增</button>
+        <button type="button" className={activeTab === 'records' ? 'is-active' : ''} onClick={() => switchTab('records')}><List size={19} />明細</button>
+        <button type="button" className={activeTab === 'categories' ? 'is-active' : ''} onClick={() => switchTab('categories')}><Coins size={19} />分類</button>
+        <button type="button" className={activeTab === 'settings' ? 'is-active' : ''} onClick={() => switchTab('settings')}><Settings size={19} />設定</button>
       </nav>
     </main>
   )
@@ -1221,6 +1512,12 @@ function CategoryIcon({ category }: { category: Pick<Category, 'id' | 'icon' | '
   if (icon === 'phone') return <Smartphone size={18} />
   if (icon === 'bank') return <Landmark size={18} />
   if (icon === 'saving') return <Coins size={18} />
+  if (icon === 'water') return <Droplets size={18} />
+  if (icon === 'electricity') return <Zap size={18} />
+  if (icon === 'gas') return <Flame size={18} />
+  if (icon === 'credit-card') return <CreditCard size={18} />
+  if (icon === 'internet') return <Wifi size={18} />
+  if (icon === 'insurance') return <Receipt size={18} />
   if (icon === 'tax' || icon === 'bill') return <Receipt size={18} />
   if (icon === 'reward') return <Trophy size={18} />
   if (icon === 'movie') return <Clapperboard size={18} />
@@ -1246,6 +1543,40 @@ function CalculatorPad({ expression, onPress }: { expression: string; onPress: (
 
 function isCalculatorOperator(key: string) {
   return ['+', '-', '*', '/', '=', 'C', '⌫'].includes(key)
+}
+
+void CalculatorPad
+
+function CalculatorPadV2({
+  expression,
+  onPress,
+}: {
+  expression: string
+  onPress: (key: string) => void | Promise<void>
+}) {
+  const keys = ['7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '*', '0', '.', 'backspace', '/', 'C', '=', 'OK']
+
+  return (
+    <div className="calculator-pad" aria-label="金額計算機">
+      <div className="calculator-display">{expression || '0'}</div>
+      <div className="calculator-grid">
+        {keys.map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={key === 'OK' ? 'is-done' : isCalculatorOperatorV2(key) ? 'is-operator' : ''}
+            onClick={() => void onPress(key)}
+          >
+            {key === '*' ? '×' : key === '/' ? '÷' : key === 'backspace' ? '⌫' : key}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function isCalculatorOperatorV2(key: string) {
+  return ['+', '-', '*', '/', '=', 'C', 'backspace'].includes(key)
 }
 
 function isPlainNumber(value: string) {
@@ -1284,6 +1615,62 @@ function calculateExpression(expression: string): number | null {
   })
 
   return Number.isFinite(result) ? result : null
+}
+
+function loadFixedExpenses(): FixedExpenseTemplate[] {
+  try {
+    const saved = localStorage.getItem(fixedExpensesStorageKey)
+    return saved ? (JSON.parse(saved) as FixedExpenseTemplate[]) : []
+  } catch {
+    return []
+  }
+}
+
+function loadQuickCategoryIds(): string[] {
+  try {
+    const saved = localStorage.getItem(quickCategoriesStorageKey)
+    return saved ? (JSON.parse(saved) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+function loadFixedExpenseApplied(): string[] {
+  try {
+    const saved = localStorage.getItem(fixedExpenseAppliedStorageKey)
+    return saved ? (JSON.parse(saved) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveFixedExpenseApplied(keys: string[]) {
+  localStorage.setItem(fixedExpenseAppliedStorageKey, JSON.stringify(Array.from(new Set(keys))))
+}
+
+function fixedExpenseApplyKey(householdId: string, templateId: string, targetMonth: string) {
+  return `${householdId}:${templateId}:${targetMonth}`
+}
+
+function firstDayOfMonth(targetMonth: string) {
+  return `${targetMonth}-01`
+}
+
+function buildQuickCategories(categories: Category[], expenses: Expense[], selectedIds: string[]) {
+  const selected = selectedIds
+    .map((id) => categories.find((category) => category.id === id))
+    .filter((category): category is Category => Boolean(category))
+
+  const recentIds = [...expenses]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((expense) => expense.categoryId)
+
+  const mergedIds = [...selected.map((category) => category.id), ...recentIds, ...categories.map((category) => category.id)]
+  const uniqueIds = Array.from(new Set(mergedIds)).slice(0, 7)
+
+  return uniqueIds
+    .map((id) => categories.find((category) => category.id === id))
+    .filter((category): category is Category => Boolean(category))
 }
 
 export default App
