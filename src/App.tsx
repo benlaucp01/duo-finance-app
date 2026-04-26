@@ -188,8 +188,8 @@ function App() {
   const [setupMode, setSetupMode] = useState<'create' | 'join'>('create')
   const [joinCode, setJoinCode] = useState('')
   const [joinName, setJoinName] = useState('')
-  const [data, setData] = useState<AppData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [data, setData] = useState<AppData | null>(() => loadCachedAppData())
+  const [isLoading, setIsLoading] = useState(() => !loadCachedAppData())
   const [currentProfileId, setCurrentProfileId] = useState<Member['id'] | null>(() => (localStorage.getItem(profileStorageKey) as Member['id'] | null) ?? null)
   const [month, setMonth] = useState(currentMonthInputValue())
   const [form, setForm] = useState<ExpenseFormState>(initialForm)
@@ -222,7 +222,13 @@ function App() {
     let isMounted = true
 
     async function boot() {
-      setIsLoading(true)
+      const cached = loadCachedAppData()
+      if (cached) {
+        applyLoadedData(cached, user)
+        setIsLoading(false)
+      } else {
+        setIsLoading(true)
+      }
 
       if (cloudMode && supabase) {
         const { data: sessionData } = await supabase.auth.getSession()
@@ -233,12 +239,6 @@ function App() {
           applyLoadedData(null, null)
           setIsLoading(false)
           return
-        }
-
-        const cached = loadCachedAppData()
-        if (cached) {
-          applyLoadedData(cached, activeUser)
-          setIsLoading(false)
         }
 
         const fresh = await loadCloudAppData(activeUser)
@@ -266,7 +266,7 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const activeUser = session?.user ?? null
       setUser(activeUser)
-      setIsLoading(true)
+      setIsLoading(!loadCachedAppData())
       loadCloudAppData(activeUser ?? undefined)
         .then((loaded) => {
           applyLoadedData(loaded, activeUser)
@@ -344,7 +344,7 @@ function App() {
     )
   }
 
-  if (cloudMode && !user) {
+  if (cloudMode && !user && !data) {
     return (
       <main className={`phone-shell theme-${theme}`}>
         <section className="profile-gate">

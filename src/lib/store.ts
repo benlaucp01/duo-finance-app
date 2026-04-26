@@ -48,6 +48,33 @@ type ExpenseRow = {
 }
 
 const categoryIconRules: Array<[string[], string]> = [
+  [['food', '\u9910', '\u98f2', '\u98df', '\u98ef', 'm\u8a18', '\u9ea5\u7576\u52de'], 'food'],
+  [['coffee', '\u5496\u5561'], 'coffee'],
+  [['grocery', '\u8d85\u5e02'], 'grocery'],
+  [['transport', '\u4ea4\u901a'], 'transport'],
+  [['train', '\u9435', 'mtr'], 'train'],
+  [['car', '\u6c7d\u8eca', '\u7684\u58eb', 'uber'], 'car'],
+  [['fuel', '\u6cb9'], 'fuel'],
+  [['travel', '\u65c5\u884c', '\u6a5f\u7968', '\u9152\u5e97'], 'travel'],
+  [['rent', '\u79df'], 'rent'],
+  [['home', '\u5bb6\u5c45', '\u5c4b\u4f01'], 'home'],
+  [['bill', '\u5e33\u55ae', '\u6c34\u96fb', '\u96fb\u8cbb'], 'bill'],
+  [['pet', '\u5bf5\u7269'], 'pet'],
+  [['shopping', '\u8cfc\u7269'], 'shopping'],
+  [['clothes', '\u8863\u7269'], 'clothes'],
+  [['gift', '\u79ae\u7269'], 'gift'],
+  [['fun', '\u5a1b\u6a02'], 'fun'],
+  [['movie', '\u96fb\u5f71'], 'movie'],
+  [['beauty', '\u7f8e\u5bb9'], 'beauty'],
+  [['medical', '\u91ab\u7642', '\u91ab'], 'medical'],
+  [['fitness', '\u5065\u8eab'], 'fitness'],
+  [['education', '\u5b78\u7fd2'], 'education'],
+  [['tech', '\u79d1\u6280', '\u96fb\u8166'], 'tech'],
+  [['phone', '\u96fb\u8a71', '\u624b\u6a5f'], 'phone'],
+  [['bank', '\u9280\u884c'], 'bank'],
+  [['saving', '\u5132\u84c4'], 'saving'],
+  [['tax', '\u7a05'], 'tax'],
+  [['reward', '\u734e\u52f5'], 'reward'],
   [['food', '餐', '飲', '飯', '早', '午', '晚', 'm記', '麥當勞'], 'food'],
   [['coffee', '咖啡'], 'coffee'],
   [['grocery', '超市'], 'grocery'],
@@ -77,11 +104,26 @@ const categoryIconRules: Array<[string[], string]> = [
   [['reward', '獎勵'], 'reward'],
 ]
 
+const defaultIconByCategoryId: Record<string, string> = {
+  food: 'food',
+  transport: 'transport',
+  rent: 'rent',
+  home: 'home',
+  pet: 'pet',
+  fun: 'fun',
+  shopping: 'shopping',
+  medical: 'medical',
+  other: 'other',
+}
+
 function inferCategoryIcon(category: Pick<Category, 'id' | 'name' | 'icon'>) {
-  if (category.icon && category.icon !== category.id) return category.icon
   const value = `${category.id} ${category.name}`.toLowerCase()
   const matched = categoryIconRules.find(([keywords]) => keywords.some((keyword) => value.includes(keyword.toLowerCase())))
-  return matched?.[1] ?? 'other'
+  const inferred = matched?.[1] ?? defaultIconByCategoryId[category.id]
+
+  if (inferred && inferred !== 'other') return inferred
+  if (category.icon && category.icon !== category.id && category.icon !== 'other') return category.icon
+  return inferred ?? 'other'
 }
 
 function normalizeCategories(categories: Category[]): Category[] {
