@@ -103,6 +103,7 @@ type ExpenseFormState = {
   date: string
   amount: string
   currency: CurrencyCode
+  payerId: Member['id'] | ''
   categoryId: string
   splitMode: SplitMode
   customPersonA: string
@@ -122,6 +123,7 @@ const initialForm: ExpenseFormState = {
   date: todayInputValue(),
   amount: '',
   currency: 'HKD',
+  payerId: '',
   categoryId: 'food',
   splitMode: 'equal',
   customPersonA: '',
@@ -531,24 +533,27 @@ function App() {
   async function buildExpenseFromForm(existing?: Expense) {
     if (!currentProfile) throw new Error('請先選擇你的身份。')
     const amount = Number(form.amount)
-    if (!amount || amount <= 0 || !form.title.trim()) throw new Error('請輸入項目和有效金額。')
+    if (!amount || amount <= 0) throw new Error('請輸入有效金額。')
     if (form.currency !== 'HKD' && form.useManualRate && Number(form.manualRate) <= 0) throw new Error('請輸入有效的手動匯率。')
 
     const rateResult = form.useManualRate && Number(form.manualRate) > 0
       ? { rate: Number(form.manualRate), source: 'manual' as const }
       : await getExchangeRateToHkd(form.currency, form.date)
     const hkdAmount = roundMoney(amount * rateResult.rate)
+    const expenseTitle = form.title.trim() || categoryName(form.categoryId)
+    const selectedPayer = appData.household.members.find((member) => member.id === form.payerId)
+    const selectedPayerId: Member['id'] = selectedPayer?.id ?? currentProfile.id
 
     return {
       id: existing?.id ?? crypto.randomUUID(),
       householdId: appData.household.id,
       date: form.date,
-      title: form.title.trim(),
+      title: expenseTitle,
       originalAmount: amount,
       originalCurrency: form.currency,
       exchangeRateToHkd: rateResult.rate,
       hkdAmount,
-      payerId: existing?.payerId ?? currentProfile.id,
+      payerId: selectedPayerId,
       categoryId: form.categoryId,
       splitMode: form.splitMode,
       split: buildSplit(form.splitMode, hkdAmount, Number(form.customPersonA) || 0),
@@ -599,7 +604,7 @@ function App() {
       const expense = await buildExpenseFromForm(existing)
       await saveExpense(expense)
       rememberQuickCategory(expense.categoryId)
-      setForm({ ...initialForm, date: form.date, categoryId: form.categoryId })
+      setForm({ ...initialForm, date: form.date, categoryId: form.categoryId, payerId: form.payerId })
       setEditingExpenseId(null)
       setStatusMessage(editingExpenseId ? '支出已更新。' : '支出已儲存。')
       switchTab('overview')
@@ -836,6 +841,7 @@ function App() {
       date: expense.date,
       amount: String(expense.originalAmount),
       currency: expense.originalCurrency,
+      payerId: expense.payerId,
       categoryId: expense.categoryId,
       splitMode: expense.splitMode,
       customPersonA: String(expense.split.personA),
@@ -1189,7 +1195,24 @@ function App() {
         <section className="screen-stack">
           <form className="panel entry-panel" onSubmit={handleAddExpense}>
             <div className="panel-title"><Plus size={18} /><h2>{editingExpenseId ? '修改支出' : '新增支出'}</h2></div>
-            <div className="payer-lock"><UserRound size={17} />付款人：{editingExpenseId ? appData.household.members.find((member) => member.id === appData.expenses.find((expense) => expense.id === editingExpenseId)?.payerId)?.name : currentProfile.name}</div>
+            <div className="payer-selector">
+              <span><UserRound size={17} />入帳帳戶</span>
+              <div>
+                {appData.household.members.map((member) => {
+                  const selectedPayerId = form.payerId || currentProfile.id
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      className={selectedPayerId === member.id ? 'selected' : ''}
+                      onClick={() => setForm({ ...form, payerId: member.id })}
+                    >
+                      {member.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <label className="hero-input">項目<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" /></label>
             <div className="amount-currency-row">
               <label>金額<input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" /></label>
@@ -1232,8 +1255,6 @@ function App() {
                 </div>
               </div>
             )}
-            <label>分攤方式<select value={form.splitMode} onChange={(event) => setForm({ ...form, splitMode: event.target.value as SplitMode })}><option value="equal">平均分</option><option value="personA">{personA.name} 全負擔</option><option value="personB">{personB.name} 全負擔</option><option value="custom">自訂金額</option></select></label>
-            {form.splitMode === 'custom' && <label>{personA.name} 負擔多少 HKD<input type="number" min="0" step="0.01" value={form.customPersonA} onChange={(event) => setForm({ ...form, customPersonA: event.target.value })} placeholder="餘額會自動分給另一方" /></label>}
             <label>備註<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如：信用卡實際匯率、旅行地點等" /></label>
             <button className="primary-action" type="submit" disabled={isSaving}><Check size={18} />{isSaving ? '儲存中...' : editingExpenseId ? '更新支出' : '儲存支出'}</button>
             {editingExpenseId && <button className="secondary-action" type="button" onClick={() => { setEditingExpenseId(null); setForm(initialForm) }}>取消修改</button>}

@@ -1144,6 +1144,46 @@ textarea:focus {
   font-weight: 900;
 }
 
+.payer-selector {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.payer-selector > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.payer-selector > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.payer-selector button {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(15, 24, 34, 0.72);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.payer-selector button.selected {
+  border-color: rgba(183, 255, 22, 0.72);
+  background: var(--lime-soft);
+  color: var(--lime);
+}
+
 .primary-action,
 .secondary-action,
 .copy-code {
@@ -1634,6 +1674,7 @@ textarea:focus {
 .theme-white .member-list div,
 .theme-white .profile-options button,
 .theme-white .theme-options button,
+.theme-white .payer-selector button,
 .theme-white .inline-category-maker,
 .theme-white .panel-menu,
 .theme-white .panel-menu-button,
