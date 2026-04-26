@@ -47,8 +47,63 @@ type ExpenseRow = {
   expense_splits?: Array<{ member_key: Member['id']; hkd_amount: number | string }>
 }
 
+const categoryIconRules: Array<[string[], string]> = [
+  [['food', '餐', '飲', '飯', '早', '午', '晚', 'm記', '麥當勞'], 'food'],
+  [['coffee', '咖啡'], 'coffee'],
+  [['grocery', '超市'], 'grocery'],
+  [['transport', '交通'], 'transport'],
+  [['train', '鐵', 'mtr'], 'train'],
+  [['car', '汽車', '的士', 'uber'], 'car'],
+  [['fuel', '油'], 'fuel'],
+  [['travel', '旅行', '機票', '酒店'], 'travel'],
+  [['rent', '租'], 'rent'],
+  [['home', '家居', '屋企'], 'home'],
+  [['bill', '帳單', '水電', '電費'], 'bill'],
+  [['pet', '寵物'], 'pet'],
+  [['shopping', '購物'], 'shopping'],
+  [['clothes', '衣物'], 'clothes'],
+  [['gift', '禮物'], 'gift'],
+  [['fun', '娛樂'], 'fun'],
+  [['movie', '電影'], 'movie'],
+  [['beauty', '美容'], 'beauty'],
+  [['medical', '醫療', '醫'], 'medical'],
+  [['fitness', '健身'], 'fitness'],
+  [['education', '學習'], 'education'],
+  [['tech', '科技', '電腦'], 'tech'],
+  [['phone', '電話', '手機'], 'phone'],
+  [['bank', '銀行'], 'bank'],
+  [['saving', '儲蓄'], 'saving'],
+  [['tax', '稅'], 'tax'],
+  [['reward', '獎勵'], 'reward'],
+]
+
+function inferCategoryIcon(category: Pick<Category, 'id' | 'name' | 'icon'>) {
+  if (category.icon && category.icon !== category.id) return category.icon
+  const value = `${category.id} ${category.name}`.toLowerCase()
+  const matched = categoryIconRules.find(([keywords]) => keywords.some((keyword) => value.includes(keyword.toLowerCase())))
+  return matched?.[1] ?? 'other'
+}
+
+function normalizeCategories(categories: Category[]): Category[] {
+  return categories.map((category) => ({
+    ...category,
+    icon: inferCategoryIcon(category),
+  }))
+}
+
 function cloneDemoData(): AppData {
-  return JSON.parse(JSON.stringify(demoData)) as AppData
+  const cloned = JSON.parse(JSON.stringify(demoData)) as AppData
+  return { ...cloned, categories: normalizeCategories(cloned.categories) }
+}
+
+export function loadCachedAppData(): AppData | null {
+  try {
+    const saved = localStorage.getItem(storageKey)
+    const parsed = saved ? (JSON.parse(saved) as AppData) : null
+    return parsed ? { ...parsed, categories: normalizeCategories(parsed.categories) } : null
+  } catch {
+    return null
+  }
 }
 
 function generateInviteCode() {
@@ -127,8 +182,7 @@ async function getUser() {
 
 export async function loadAppData(): Promise<AppData> {
   if (!isSupabaseConfigured || !supabase) {
-    const saved = localStorage.getItem(storageKey)
-    return saved ? (JSON.parse(saved) as AppData) : cloneDemoData()
+    return loadCachedAppData() ?? cloneDemoData()
   }
 
   const user = await getUser()
@@ -220,7 +274,7 @@ export async function loadCloudHousehold(householdId: string): Promise<AppData> 
 
   return {
     household,
-    categories: (categoriesResult.data ?? []) as CategoryRow[],
+    categories: normalizeCategories((categoriesResult.data ?? []) as CategoryRow[]),
     expenses: ((expensesResult.data ?? []) as ExpenseRow[]).map(mapExpense),
   }
 }
@@ -463,7 +517,7 @@ export function subscribeToHousehold(householdId: string, onChange: () => void) 
 }
 
 export async function saveLocalAppData(data: AppData) {
-  localStorage.setItem(storageKey, JSON.stringify(data))
+  localStorage.setItem(storageKey, JSON.stringify({ ...data, categories: normalizeCategories(data.categories) }))
 }
 
 export function buildHousehold(

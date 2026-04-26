@@ -63,6 +63,7 @@ import {
   insertCloudExpense,
   joinCloudHousehold,
   loadAppData,
+  loadCachedAppData,
   loadCloudAppData,
   saveLocalAppData,
   sendMagicLink,
@@ -79,6 +80,7 @@ import type { AppData, Category, CurrencyCode, Expense, Member, SplitMode } from
 type Tab = 'overview' | 'add' | 'records' | 'categories' | 'settings'
 type ThemeName = 'neon' | 'dream' | 'white'
 type RecordFilter = Member['id'] | 'all'
+type CalculatorTarget = 'quick' | 'expense' | 'repeat'
 
 type ExpenseFormState = {
   title: string
@@ -205,6 +207,7 @@ function App() {
   const [newCategory, setNewCategory] = useState('')
   const [newCategoryIcon, setNewCategoryIcon] = useState('other')
   const [ratioPersonA, setRatioPersonA] = useState('50')
+  const [calculator, setCalculator] = useState<{ target: CalculatorTarget; expression: string } | null>(null)
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false)
   const [isExpenseCategoryFormOpen, setIsExpenseCategoryFormOpen] = useState(false)
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false)
@@ -226,11 +229,27 @@ function App() {
         const activeUser = sessionData.session?.user ?? null
         if (!isMounted) return
         setUser(activeUser)
-        applyLoadedData(activeUser ? await loadCloudAppData(activeUser) : null, activeUser)
+        if (!activeUser) {
+          applyLoadedData(null, null)
+          setIsLoading(false)
+          return
+        }
+
+        const cached = loadCachedAppData()
+        if (cached) {
+          applyLoadedData(cached, activeUser)
+          setIsLoading(false)
+        }
+
+        const fresh = await loadCloudAppData(activeUser)
+        if (!isMounted) return
+        applyLoadedData(fresh, activeUser)
+        if (fresh) await saveLocalAppData(fresh)
       } else {
         const loaded = await loadAppData()
         if (!isMounted) return
         applyLoadedData(loaded, null)
+        await saveLocalAppData(loaded)
       }
 
       setIsLoading(false)
@@ -249,7 +268,10 @@ function App() {
       setUser(activeUser)
       setIsLoading(true)
       loadCloudAppData(activeUser ?? undefined)
-        .then((loaded) => applyLoadedData(loaded, activeUser))
+        .then((loaded) => {
+          applyLoadedData(loaded, activeUser)
+          if (loaded) void saveLocalAppData(loaded)
+        })
         .finally(() => setIsLoading(false))
     })
 
@@ -269,6 +291,7 @@ function App() {
     return subscribeToHousehold(data.household.id, async () => {
       const refreshed = await loadCloudAppData(user ?? undefined)
       applyLoadedData(refreshed, user)
+      if (refreshed) await saveLocalAppData(refreshed)
     })
   }, [cloudMode, data?.household.id, user])
 
@@ -282,6 +305,7 @@ function App() {
     if (!cloudMode) return
     const refreshed = await loadCloudAppData(user ?? undefined)
     applyLoadedData(refreshed, user)
+    if (refreshed) await saveLocalAppData(refreshed)
   }
 
   function applyLoadedData(loaded: AppData | null, activeUser: User | null = user) {
@@ -568,6 +592,54 @@ function App() {
     }
   }
 
+  function openCalculator(target: CalculatorTarget, value: string) {
+    setCalculator({ target, expression: value || '' })
+  }
+
+  function setCalculatorAmount(target: CalculatorTarget, value: string) {
+    if (target === 'quick') setQuickAmount(value)
+    if (target === 'expense') setForm((current) => ({ ...current, amount: value }))
+    if (target === 'repeat') setRepeatDraft((current) => (current ? { ...current, amount: value } : current))
+  }
+
+  function handleCalculatorPress(key: string) {
+    if (!calculator) return
+
+    if (key === 'OK') {
+      const result = calculateExpression(calculator.expression)
+      if (result !== null) setCalculatorAmount(calculator.target, formatCalculatorValue(result))
+      setCalculator(null)
+      return
+    }
+
+    if (key === '=') {
+      const result = calculateExpression(calculator.expression)
+      if (result !== null) {
+        const value = formatCalculatorValue(result)
+        setCalculator({ ...calculator, expression: value })
+        setCalculatorAmount(calculator.target, value)
+      }
+      return
+    }
+
+    if (key === 'C') {
+      setCalculator({ ...calculator, expression: '' })
+      setCalculatorAmount(calculator.target, '')
+      return
+    }
+
+    if (key === '⌫') {
+      const value = calculator.expression.slice(0, -1)
+      setCalculator({ ...calculator, expression: value })
+      setCalculatorAmount(calculator.target, value)
+      return
+    }
+
+    const value = `${calculator.expression}${key}`
+    setCalculator({ ...calculator, expression: value })
+    if (isPlainNumber(value)) setCalculatorAmount(calculator.target, value)
+  }
+
   function startEditExpense(expense: Expense) {
     setEditingExpenseId(expense.id)
     setForm({
@@ -776,9 +848,10 @@ function App() {
               <input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="項目，例如：麥當勞晚餐" aria-label="快速輸入項目" />
               <div className="quick-input-row">
                 <span>HK$</span>
-                <input type="number" min="0" step="0.01" value={quickAmount} onChange={(event) => setQuickAmount(event.target.value)} placeholder="金額" aria-label="快速輸入金額" />
+                <input type="number" min="0" step="0.01" value={quickAmount} onFocus={() => openCalculator('quick', quickAmount)} onChange={(event) => setQuickAmount(event.target.value)} placeholder="金額" aria-label="快速輸入金額" />
                 <button type="submit" disabled={isQuickSaving}><Plus size={18} /></button>
               </div>
+              {calculator?.target === 'quick' && <CalculatorPad expression={calculator.expression} onPress={handleCalculatorPress} />}
             </div>
           </form>
 
@@ -836,7 +909,8 @@ function App() {
               {repeatDraft && (
                 <div className="repeat-confirm">
                   <strong>重複加入：{repeatDraft.expense.title}</strong>
-                  <input type="number" min="0" step="0.01" value={repeatDraft.amount} onChange={(event) => setRepeatDraft({ ...repeatDraft, amount: event.target.value })} />
+                  <input type="number" min="0" step="0.01" value={repeatDraft.amount} onFocus={() => openCalculator('repeat', repeatDraft.amount)} onChange={(event) => setRepeatDraft({ ...repeatDraft, amount: event.target.value })} />
+                  {calculator?.target === 'repeat' && <CalculatorPad expression={calculator.expression} onPress={handleCalculatorPress} />}
                   <div className="confirm-actions">
                     <button type="button" onClick={() => setRepeatDraft(null)}>取消</button>
                     <button type="button" onClick={() => void handleConfirmRepeat()}>確認加入</button>
@@ -890,9 +964,10 @@ function App() {
             <div className="payer-lock"><UserRound size={17} />付款人：{editingExpenseId ? appData.household.members.find((member) => member.id === appData.expenses.find((expense) => expense.id === editingExpenseId)?.payerId)?.name : currentProfile.name}</div>
             <label className="hero-input">項目<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" /></label>
             <div className="amount-currency-row">
-              <label>金額<input type="number" min="0" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="0.00" /></label>
+              <label>金額<input type="number" min="0" step="0.01" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="0.00" /></label>
               <label>貨幣<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })}>{currencies.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
             </div>
+            {calculator?.target === 'expense' && <CalculatorPad expression={calculator.expression} onPress={handleCalculatorPress} />}
             <label>日期<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
             {form.currency !== 'HKD' && <label className="toggle-line"><input type="checkbox" checked={form.useManualRate} onChange={(event) => setForm({ ...form, useManualRate: event.target.checked })} />使用手動匯率</label>}
             {form.currency !== 'HKD' && form.useManualRate && <label>1 {form.currency} 等於多少 HKD<input type="number" min="0" step="0.0001" value={form.manualRate} onChange={(event) => setForm({ ...form, manualRate: event.target.value })} placeholder="例如：0.052" /></label>}
@@ -1150,6 +1225,65 @@ function CategoryIcon({ category }: { category: Pick<Category, 'id' | 'icon' | '
   if (icon === 'reward') return <Trophy size={18} />
   if (icon === 'movie') return <Clapperboard size={18} />
   return <Coins size={18} />
+}
+
+function CalculatorPad({ expression, onPress }: { expression: string; onPress: (key: string) => void }) {
+  const keys = ['7', '8', '9', '+', '4', '5', '6', '-', '1', '2', '3', '*', '0', '.', '⌫', '/', 'C', '=', 'OK']
+
+  return (
+    <div className="calculator-pad" aria-label="金額計算機">
+      <div className="calculator-display">{expression || '0'}</div>
+      <div className="calculator-grid">
+        {keys.map((key) => (
+          <button key={key} type="button" className={key === 'OK' ? 'is-done' : isCalculatorOperator(key) ? 'is-operator' : ''} onClick={() => onPress(key)}>
+            {key === '*' ? '×' : key === '/' ? '÷' : key}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function isCalculatorOperator(key: string) {
+  return ['+', '-', '*', '/', '=', 'C', '⌫'].includes(key)
+}
+
+function isPlainNumber(value: string) {
+  return /^\d*\.?\d*$/.test(value)
+}
+
+function formatCalculatorValue(value: number) {
+  return String(Math.round(value * 100) / 100)
+}
+
+function calculateExpression(expression: string): number | null {
+  const clean = expression.replace(/\s/g, '')
+  if (!/^\d*\.?\d+(?:[+\-*/]\d*\.?\d+)*$/.test(clean)) return null
+
+  const numbers: number[] = clean.split(/[+\-*/]/).map(Number)
+  const operators: string[] = clean.match(/[+\-*/]/g) ?? []
+
+  for (let index = 0; index < operators.length; index += 1) {
+    const operator = operators[index]
+    if (operator !== '*' && operator !== '/') continue
+
+    const result = operator === '*'
+      ? numbers[index] * numbers[index + 1]
+      : numbers[index + 1] === 0
+        ? NaN
+        : numbers[index] / numbers[index + 1]
+
+    numbers.splice(index, 2, result)
+    operators.splice(index, 1)
+    index -= 1
+  }
+
+  let result = numbers[0] ?? 0
+  operators.forEach((operator, index) => {
+    result = operator === '+' ? result + numbers[index + 1] : result - numbers[index + 1]
+  })
+
+  return Number.isFinite(result) ? result : null
 }
 
 export default App

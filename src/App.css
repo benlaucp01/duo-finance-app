@@ -571,6 +571,55 @@ button:active {
   box-shadow: 0 10px 24px rgba(183, 255, 22, 0.12);
 }
 
+.calculator-pad {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(15, 24, 34, 0.42);
+}
+
+.calculator-display {
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: rgba(15, 24, 34, 0.72);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 900;
+  text-align: right;
+  overflow-x: auto;
+}
+
+.calculator-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+.calculator-grid button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(39, 49, 61, 0.72);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.calculator-grid button.is-operator {
+  color: var(--lime);
+}
+
+.calculator-grid button.is-done {
+  grid-column: span 3;
+  background: var(--lime);
+  color: var(--deep);
+}
+
 .quick-input-row button {
   display: grid;
   place-items: center;
@@ -1468,6 +1517,9 @@ textarea:focus {
 .theme-white select,
 .theme-white textarea,
 .theme-white .quick-input-row,
+.theme-white .calculator-pad,
+.theme-white .calculator-display,
+.theme-white .calculator-grid button,
 .theme-white .category-icon,
 .theme-white .expense-category-grid button,
 .theme-white .icon-picker button,
