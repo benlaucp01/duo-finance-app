@@ -1,8 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0f172a"/>
-  <path d="M132 168h248a36 36 0 0 1 36 36v148a36 36 0 0 1-36 36H132a36 36 0 0 1-36-36V204a36 36 0 0 1 36-36Z" fill="#eff6ff"/>
-  <path d="M132 168h248a36 36 0 0 1 36 36v34H96v-34a36 36 0 0 1 36-36Z" fill="#38bdf8"/>
-  <circle cx="180" cy="312" r="44" fill="#2563eb"/>
-  <circle cx="332" cy="312" r="44" fill="#10b981"/>
-  <path d="M218 312h76" stroke="#0f172a" stroke-width="28" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="76" y1="38" x2="442" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#192334"/>
+      <stop offset="0.55" stop-color="#06111c"/>
+      <stop offset="1" stop-color="#11241e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(346 168) rotate(126) scale(252)">
+      <stop stop-color="#b7ff16" stop-opacity="0.72"/>
+      <stop offset="0.46" stop-color="#64d6b5" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#64d6b5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="128" y1="140" x2="388" y2="384" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2b3949"/>
+      <stop offset="1" stop-color="#17232a"/>
+    </linearGradient>
+    <filter id="shadow" x="44" y="58" width="424" height="410" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="108" fill="url(#glow)"/>
+  <g filter="url(#shadow)">
+    <rect x="92" y="118" width="328" height="276" rx="58" fill="url(#card)"/>
+    <rect x="92" y="118" width="328" height="276" rx="58" fill="#ffffff" opacity="0.07"/>
+    <path d="M164 218c0-31 25-56 56-56h72c31 0 56 25 56 56v90c0 31-25 56-56 56h-72c-31 0-56-25-56-56v-90Z" fill="#0b1620" opacity="0.72"/>
+    <circle cx="198" cy="248" r="44" fill="#b7ff16"/>
+    <circle cx="314" cy="248" r="44" fill="#64d6b5"/>
+    <path d="M222 318h68" stroke="#eaf7ef" stroke-width="24" stroke-linecap="round"/>
+    <path d="M256 198v128" stroke="#07111a" stroke-width="18" stroke-linecap="round"/>
+    <path d="M182 236h32M198 220v56M298 236h32M314 220v56" stroke="#07111a" stroke-width="14" stroke-linecap="round"/>
+    <path d="M180 318h26M306 318h26" stroke="#b7ff16" stroke-width="16" stroke-linecap="round"/>
+  </g>
 </svg>
