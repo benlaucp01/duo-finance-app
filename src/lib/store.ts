@@ -10,6 +10,8 @@ type HouseholdRow = {
   name: string
   base_currency: 'HKD'
   invite_code: string
+  settlement_person_a_percent?: number | string | null
+  settlement_person_b_percent?: number | string | null
 }
 
 type MemberRow = {
@@ -24,6 +26,7 @@ type CategoryRow = {
   id: string
   name: string
   color: string
+  icon?: string | null
 }
 
 type ExpenseRow = {
@@ -174,7 +177,11 @@ export async function loadCloudHousehold(householdId: string): Promise<AppData> 
     categoriesResult,
     expensesResult,
   ] = await Promise.all([
-    client.from('households').select('id,name,base_currency,invite_code').eq('id', householdId).single(),
+    client
+      .from('households')
+      .select('id,name,base_currency,invite_code,settlement_person_a_percent,settlement_person_b_percent')
+      .eq('id', householdId)
+      .single(),
     client
       .from('household_members')
       .select('household_id,user_id,member_key,display_name,profiles(email)')
@@ -182,7 +189,7 @@ export async function loadCloudHousehold(householdId: string): Promise<AppData> 
       .order('member_key'),
     client
       .from('categories')
-      .select('id,name,color')
+      .select('id,name,color,icon')
       .eq('household_id', householdId)
       .order('created_at'),
     client
@@ -204,6 +211,10 @@ export async function loadCloudHousehold(householdId: string): Promise<AppData> 
     name: householdRow.name,
     inviteCode: householdRow.invite_code,
     baseCurrency: householdRow.base_currency,
+    settlementRatio: {
+      personA: toMoney(householdRow.settlement_person_a_percent ?? 50),
+      personB: toMoney(householdRow.settlement_person_b_percent ?? 50),
+    },
     members: normalizeMembers((membersResult.data ?? []) as MemberRow[]),
   }
 
@@ -342,6 +353,43 @@ export async function insertCloudExpense(expense: Expense) {
   if (splitError) throw splitError
 }
 
+export async function updateCloudExpense(expense: Expense) {
+  const client = requireSupabase()
+  const { error: expenseError } = await client
+    .from('expenses')
+    .update({
+      expense_date: expense.date,
+      title: expense.title,
+      original_amount: expense.originalAmount,
+      original_currency: expense.originalCurrency,
+      exchange_rate_to_hkd: expense.exchangeRateToHkd,
+      hkd_amount: expense.hkdAmount,
+      payer_key: expense.payerId,
+      category_id: expense.categoryId,
+      split_mode: expense.splitMode,
+      note: expense.note,
+      rate_source: expense.rateSource,
+    })
+    .eq('id', expense.id)
+
+  if (expenseError) throw expenseError
+
+  const { error: splitError } = await client.from('expense_splits').upsert([
+    {
+      expense_id: expense.id,
+      member_key: 'personA',
+      hkd_amount: expense.split.personA,
+    },
+    {
+      expense_id: expense.id,
+      member_key: 'personB',
+      hkd_amount: expense.split.personB,
+    },
+  ])
+
+  if (splitError) throw splitError
+}
+
 export async function deleteCloudExpense(expenseId: string) {
   const client = requireSupabase()
   const { error } = await client.from('expenses').delete().eq('id', expenseId)
@@ -351,17 +399,50 @@ export async function deleteCloudExpense(expenseId: string) {
   }
 }
 
-export async function insertCloudCategory(householdId: string, name: string, color: string) {
+export async function insertCloudCategory(
+  householdId: string,
+  name: string,
+  color: string,
+  icon: string,
+) {
   const client = requireSupabase()
   const { data, error } = await client
     .from('categories')
-    .insert({ household_id: householdId, name, color })
-    .select('id,name,color')
+    .insert({ household_id: householdId, name, color, icon })
+    .select('id,name,color,icon')
     .single()
 
   if (error) throw error
 
   return data as Category
+}
+
+export async function deleteCloudCategory(categoryId: string) {
+  const client = requireSupabase()
+  const { error } = await client.from('categories').delete().eq('id', categoryId)
+
+  if (error) {
+    throw error
+  }
+}
+
+export async function updateCloudSettlementRatio(
+  householdId: string,
+  personA: number,
+  personB: number,
+) {
+  const client = requireSupabase()
+  const { error } = await client
+    .from('households')
+    .update({
+      settlement_person_a_percent: personA,
+      settlement_person_b_percent: personB,
+    })
+    .eq('id', householdId)
+
+  if (error) {
+    throw error
+  }
 }
 
 export function subscribeToHousehold(householdId: string, onChange: () => void) {
@@ -394,6 +475,7 @@ export function buildHousehold(
     name: '我們的帳本',
     inviteCode: generateInviteCode(),
     baseCurrency: 'HKD',
+    settlementRatio: { personA: 50, personB: 50 },
     members: [
       { id: 'personA', name: personAName || 'Person A' },
       { id: 'personB', name: personBName || 'Person B' },
@@ -423,5 +505,26 @@ export function addCategory(data: AppData, category: Category): AppData {
   return {
     ...data,
     categories: [...data.categories, category],
+  }
+}
+
+export function deleteCategory(data: AppData, categoryId: string): AppData {
+  return {
+    ...data,
+    categories: data.categories.filter((category) => category.id !== categoryId),
+  }
+}
+
+export function updateSettlementRatio(
+  data: AppData,
+  personA: number,
+  personB: number,
+): AppData {
+  return {
+    ...data,
+    household: {
+      ...data.household,
+      settlementRatio: { personA, personB },
+    },
   }
 }

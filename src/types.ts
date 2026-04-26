@@ -16,6 +16,7 @@ export type Category = {
   id: string
   name: string
   color: string
+  icon?: string
 }
 
 export type Member = {
@@ -30,6 +31,7 @@ export type Household = {
   name: string
   inviteCode: string
   baseCurrency: 'HKD'
+  settlementRatio: ExpenseSplit
   members: [Member, Member]
 }
 

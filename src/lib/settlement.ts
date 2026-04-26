@@ -1,4 +1,4 @@
-import type { Expense, Settlement } from '../types'
+import type { Expense, ExpenseSplit, Settlement } from '../types'
 import { roundMoney } from './money'
 
 export function expensesForMonth(expenses: Expense[], month: string) {
@@ -7,7 +7,10 @@ export function expensesForMonth(expenses: Expense[], month: string) {
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
-export function calculateSettlement(expenses: Expense[]): Settlement {
+export function calculateSettlement(
+  expenses: Expense[],
+  settlementRatio?: ExpenseSplit,
+): Settlement {
   const totalHkd = roundMoney(
     expenses.reduce((total, expense) => total + expense.hkdAmount, 0),
   )
@@ -22,14 +25,27 @@ export function calculateSettlement(expenses: Expense[]): Settlement {
     { personA: 0, personB: 0 },
   )
 
-  const owed = expenses.reduce(
-    (totals, expense) => {
-      totals.personA = roundMoney(totals.personA + expense.split.personA)
-      totals.personB = roundMoney(totals.personB + expense.split.personB)
-      return totals
-    },
-    { personA: 0, personB: 0 },
-  )
+  const ratioTotal =
+    settlementRatio && settlementRatio.personA + settlementRatio.personB > 0
+      ? settlementRatio.personA + settlementRatio.personB
+      : 0
+
+  const owed =
+    ratioTotal > 0
+      ? {
+          personA: roundMoney(totalHkd * (settlementRatio!.personA / ratioTotal)),
+          personB: roundMoney(
+            totalHkd - roundMoney(totalHkd * (settlementRatio!.personA / ratioTotal)),
+          ),
+        }
+      : expenses.reduce(
+          (totals, expense) => {
+            totals.personA = roundMoney(totals.personA + expense.split.personA)
+            totals.personB = roundMoney(totals.personB + expense.split.personB)
+            return totals
+          },
+          { personA: 0, personB: 0 },
+        )
 
   const net = {
     personA: roundMoney(paid.personA - owed.personA),

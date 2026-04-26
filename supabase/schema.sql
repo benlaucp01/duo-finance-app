@@ -12,6 +12,8 @@ create table public.households (
   name text not null,
   base_currency text not null default 'HKD' check (base_currency = 'HKD'),
   invite_code text not null unique,
+  settlement_person_a_percent numeric(5, 2) not null default 50,
+  settlement_person_b_percent numeric(5, 2) not null default 50,
   created_by uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now()
 );
@@ -31,6 +33,7 @@ create table public.categories (
   household_id uuid not null references public.households(id) on delete cascade,
   name text not null,
   color text not null,
+  icon text not null default 'other',
   created_at timestamptz not null default now()
 );
 
@@ -226,8 +229,14 @@ begin
     );
   end loop;
 
-  insert into public.households (name, invite_code, created_by)
-  values ('我們的帳本', new_invite_code, auth.uid())
+  insert into public.households (
+    name,
+    invite_code,
+    created_by,
+    settlement_person_a_percent,
+    settlement_person_b_percent
+  )
+  values ('我們的帳本', new_invite_code, auth.uid(), 50, 50)
   returning id into new_household_id;
 
   insert into public.household_members (household_id, user_id, member_key, display_name)
@@ -235,17 +244,17 @@ begin
     (new_household_id, auth.uid(), 'personA', coalesce(nullif(trim(person_a_name_input), ''), 'Ben')),
     (new_household_id, null, 'personB', coalesce(nullif(trim(person_b_name_input), ''), 'Emily'));
 
-  insert into public.categories (household_id, name, color)
+  insert into public.categories (household_id, name, color, icon)
   values
-    (new_household_id, '餐飲', '#b7ff16'),
-    (new_household_id, '交通', '#7fdc12'),
-    (new_household_id, '租金', '#8fb8ff'),
-    (new_household_id, '家居', '#64d6b5'),
-    (new_household_id, '寵物', '#ffd6ff'),
-    (new_household_id, '娛樂', '#bfa7ff'),
-    (new_household_id, '購物', '#ffd166'),
-    (new_household_id, '醫療', '#ff8fab'),
-    (new_household_id, '其他', '#94a3b8');
+    (new_household_id, '餐飲', '#b7ff16', 'food'),
+    (new_household_id, '交通', '#7fdc12', 'transport'),
+    (new_household_id, '租金', '#8fb8ff', 'home'),
+    (new_household_id, '家居', '#64d6b5', 'home'),
+    (new_household_id, '寵物', '#ffd6ff', 'pet'),
+    (new_household_id, '娛樂', '#bfa7ff', 'fun'),
+    (new_household_id, '購物', '#ffd166', 'shopping'),
+    (new_household_id, '醫療', '#ff8fab', 'medical'),
+    (new_household_id, '其他', '#94a3b8', 'other');
 
   return new_household_id;
 end;
