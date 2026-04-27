@@ -51,6 +51,29 @@
   --shadow: 0 24px 60px rgba(17, 24, 39, 0.1);
 }
 
+.phone-shell.theme-wise {
+  --paper: #ffffff;
+  --glass: #ffffff;
+  --card: #ffffff;
+  --card-2: #f4f7f0;
+  --deep: #163300;
+  --lime: #9fe870;
+  --accent-2: #cdffad;
+  --hero-text: #0e0f0c;
+  --lime-soft: rgba(22, 51, 0, 0.08);
+  --ink: #0e0f0c;
+  --muted: #454745;
+  --line: rgba(14, 15, 12, 0.12);
+  --shadow: rgba(14, 15, 12, 0.12) 0 0 0 1px;
+}
+
+body:has(.phone-shell) {
+  background:
+    radial-gradient(circle at 50% 110%, rgba(183, 255, 22, 0.12), transparent 28%),
+    radial-gradient(circle at 12% 8%, rgba(55, 70, 85, 0.35), transparent 30%),
+    linear-gradient(145deg, #121923 0%, #07101a 52%, #050a12 100%);
+}
+
 body:has(.theme-dream) {
   background:
     radial-gradient(circle at 20% 12%, rgba(255, 214, 255, 0.34), transparent 28%),
@@ -60,10 +83,11 @@ body:has(.theme-dream) {
 }
 
 body:has(.theme-white) {
-  background:
-    radial-gradient(circle at 12% 8%, rgba(226, 232, 240, 0.72), transparent 26%),
-    radial-gradient(circle at 88% 4%, rgba(243, 244, 246, 0.86), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 56%, #eef2f7 100%);
+  background: #ffffff;
+}
+
+body:has(.theme-wise) {
+  background: #ffffff;
 }
 
 .loading-screen {
@@ -1184,6 +1208,31 @@ textarea:focus {
   color: var(--lime);
 }
 
+.shared-book-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  margin: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(15, 24, 34, 0.72);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.shared-book-toggle.selected {
+  border-color: rgba(183, 255, 22, 0.72);
+  background: var(--lime-soft);
+  color: var(--lime);
+}
+
 .primary-action,
 .secondary-action,
 .copy-code {
@@ -1216,6 +1265,18 @@ textarea:focus {
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.account-filter {
+  margin-bottom: 8px;
+}
+
+.account-filter button,
+.person-filter button {
+  min-width: 0;
+  padding-right: 6px;
+  padding-left: 6px;
+  white-space: nowrap;
 }
 
 .fixed-expense-panel {
@@ -1675,6 +1736,7 @@ textarea:focus {
 .theme-white .profile-options button,
 .theme-white .theme-options button,
 .theme-white .payer-selector button,
+.theme-white .shared-book-toggle,
 .theme-white .inline-category-maker,
 .theme-white .panel-menu,
 .theme-white .panel-menu-button,
@@ -1744,6 +1806,828 @@ textarea:focus {
 .theme-white .expense-category-grid button.selected .category-icon,
 .theme-white .icon-picker button.selected {
   box-shadow: 0 14px 28px rgba(17, 24, 39, 0.14);
+}
+
+/* Heritage Interface redesign */
+.phone-shell,
+.phone-shell.theme-dream,
+.phone-shell.theme-white {
+  background: var(--paper);
+  font-family: "Public Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.profile-gate,
+.hero-card,
+.panel,
+.person-summary article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--glass);
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.profile-gate::before,
+.profile-gate::after,
+.hero-card::before,
+.hero-card::after,
+.panel::before,
+.panel::after,
+.person-summary article::before,
+.person-summary article::after,
+.bottom-nav::before {
+  display: none;
+}
+
+.panel:hover,
+.person-summary article:hover,
+.hero-card:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
+.app-header {
+  margin-bottom: 20px;
+}
+
+.muted-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+h1 {
+  color: var(--ink);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.12;
+}
+
+h2,
+.panel-title h2,
+.quick-entry-title h2 {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.cloud-pill,
+.month-bar label,
+.setup-switch,
+.record-filter,
+.repeat-list button,
+.member-list div,
+.profile-options button,
+.theme-options button,
+.inline-category-maker,
+.panel-menu,
+.panel-menu-button,
+.ghost-icon,
+.confirm-card,
+.payer-selector button,
+.shared-book-toggle,
+input,
+select,
+textarea,
+.quick-input-row,
+.calculator-pad,
+.calculator-display,
+.calculator-grid button,
+.expense-category-grid button,
+.icon-picker button,
+.name-picker button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+  color: var(--ink);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.cloud-pill,
+.setup-switch,
+.record-filter,
+.repeat-list button,
+.member-list div,
+.profile-options button,
+.theme-options button,
+.inline-category-maker,
+.panel-menu,
+.panel-menu-button,
+.ghost-icon,
+.confirm-card,
+.payer-selector button {
+  background: #ffffff;
+}
+
+input,
+select,
+textarea {
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--ink);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--lime);
+  outline: 3px solid rgba(184, 66, 46, 0.12);
+  box-shadow: none;
+}
+
+.quick-add,
+.primary-action,
+.copy-code,
+.bottom-nav button.is-active,
+.setup-switch button.selected,
+.record-filter button.selected,
+.name-picker button.selected,
+.profile-options button.selected,
+.payer-selector button.selected {
+  border-radius: 4px;
+  background: var(--lime);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.quick-add:hover,
+.primary-action:hover,
+.copy-code:hover {
+  background: var(--accent-2);
+}
+
+.secondary-action {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.quick-entry,
+.entry-panel {
+  padding: 16px;
+}
+
+.quick-category-strip,
+.expense-category-grid,
+.category-grid {
+  gap: 10px;
+}
+
+.category-icon,
+.quick-categories button .category-icon,
+.expense-category-grid .category-icon,
+.category-tile .category-icon {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.quick-categories button.selected .category-icon,
+.expense-category-grid button.selected .category-icon,
+.icon-picker button.selected,
+.category-tile.selected .category-icon {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+  background: var(--lime) !important;
+  color: #ffffff;
+}
+
+.hero-card {
+  padding: 18px;
+  border-left: 4px solid var(--lime);
+  background: #ffffff;
+  color: var(--hero-text);
+}
+
+.hero-card p,
+.transfer-line,
+.transfer-line b,
+.transfer-line.balanced {
+  color: var(--hero-text);
+}
+
+.hero-card p {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hero-card strong {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.hero-divider {
+  background: var(--line);
+}
+
+.person-summary strong {
+  font-size: 21px;
+}
+
+.person-summary em,
+.ratio-details span,
+.category-summary span i + * {
+  color: var(--lime);
+}
+
+.ratio-bar {
+  min-height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #f3efea;
+  box-shadow: none;
+}
+
+.ratio-bar > div {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.ratio-a {
+  background: var(--lime);
+}
+
+.ratio-b {
+  background: #c9c1b6;
+  color: var(--ink) !important;
+}
+
+.calculator-pad {
+  padding: 10px;
+  background: #f7f5f2;
+}
+
+.calculator-grid button.is-operator,
+.calculator-grid button.is-done {
+  background: var(--lime);
+  color: #ffffff;
+}
+
+.bottom-nav {
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+  box-shadow: 0 -1px 2px rgba(26, 28, 30, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.bottom-nav button {
+  border-radius: 8px;
+}
+
+.theme-swatch {
+  border-radius: 6px;
+}
+
+.neon-swatch {
+  background: #b8422e;
+}
+
+.dream-swatch {
+  background: #f3ebe2;
+  border: 1px solid var(--line);
+}
+
+.white-swatch {
+  background: #ffffff;
+  border: 1px solid var(--line);
+}
+
+.wise-swatch {
+  background: #9fe870;
+}
+
+/* Keep the original visual systems for non-Wise themes. */
+.phone-shell:not(.theme-wise) {
+  color: var(--ink);
+  font-feature-settings: normal;
+  background: transparent;
+}
+
+.phone-shell:not(.theme-wise) .profile-gate,
+.phone-shell:not(.theme-wise) .hero-card,
+.phone-shell:not(.theme-wise) .panel,
+.phone-shell:not(.theme-wise) .person-summary article {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+}
+
+.phone-shell:not(.theme-wise) .profile-gate,
+.phone-shell:not(.theme-wise) .panel,
+.phone-shell:not(.theme-wise) .person-summary article {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--glass);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+.phone-shell:not(.theme-wise) .profile-gate::before,
+.phone-shell:not(.theme-wise) .hero-card::before,
+.phone-shell:not(.theme-wise) .panel::before,
+.phone-shell:not(.theme-wise) .person-summary article::before,
+.phone-shell:not(.theme-wise) .bottom-nav::before {
+  display: block;
+}
+
+.phone-shell:not(.theme-wise) .profile-gate::after,
+.phone-shell:not(.theme-wise) .panel::after,
+.phone-shell:not(.theme-wise) .person-summary article::after {
+  display: block;
+}
+
+.phone-shell:not(.theme-wise) h1 {
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1.08;
+}
+
+.phone-shell:not(.theme-wise) h2,
+.phone-shell:not(.theme-wise) .panel-title h2,
+.phone-shell:not(.theme-wise) .quick-entry-title h2 {
+  font-size: 17px;
+  font-weight: 760;
+  line-height: normal;
+}
+
+.phone-shell:not(.theme-wise) .cloud-pill,
+.phone-shell:not(.theme-wise) .month-bar label,
+.phone-shell:not(.theme-wise) .setup-switch,
+.phone-shell:not(.theme-wise) .record-filter,
+.phone-shell:not(.theme-wise) .repeat-list button,
+.phone-shell:not(.theme-wise) .member-list div,
+.phone-shell:not(.theme-wise) .profile-options button,
+.phone-shell:not(.theme-wise) .theme-options button,
+.phone-shell:not(.theme-wise) .inline-category-maker,
+.phone-shell:not(.theme-wise) .panel-menu,
+.phone-shell:not(.theme-wise) .panel-menu-button,
+.phone-shell:not(.theme-wise) .ghost-icon,
+.phone-shell:not(.theme-wise) .confirm-card,
+.phone-shell:not(.theme-wise) .payer-selector button,
+.phone-shell:not(.theme-wise) .shared-book-toggle,
+.phone-shell:not(.theme-wise) input,
+.phone-shell:not(.theme-wise) select,
+.phone-shell:not(.theme-wise) textarea,
+.phone-shell:not(.theme-wise) .quick-input-row,
+.phone-shell:not(.theme-wise) .calculator-pad,
+.phone-shell:not(.theme-wise) .calculator-display,
+.phone-shell:not(.theme-wise) .calculator-grid button,
+.phone-shell:not(.theme-wise) .expense-category-grid button,
+.phone-shell:not(.theme-wise) .icon-picker button,
+.phone-shell:not(.theme-wise) .name-picker button,
+.phone-shell:not(.theme-wise) .fixed-expense-item {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(15, 24, 34, 0.72);
+  color: var(--ink);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+}
+
+.phone-shell:not(.theme-wise) input,
+.phone-shell:not(.theme-wise) select,
+.phone-shell:not(.theme-wise) textarea {
+  min-height: 46px;
+  padding: 10px 12px;
+}
+
+.phone-shell:not(.theme-wise) input:focus,
+.phone-shell:not(.theme-wise) select:focus,
+.phone-shell:not(.theme-wise) textarea:focus {
+  border-color: rgba(183, 255, 22, 0.42);
+  outline: 4px solid rgba(183, 255, 22, 0.12);
+  box-shadow: 0 10px 24px rgba(183, 255, 22, 0.1);
+}
+
+.phone-shell:not(.theme-wise) .quick-add,
+.phone-shell:not(.theme-wise) .primary-action,
+.phone-shell:not(.theme-wise) .copy-code,
+.phone-shell:not(.theme-wise) .bottom-nav button.is-active,
+.phone-shell:not(.theme-wise) .setup-switch button.selected,
+.phone-shell:not(.theme-wise) .record-filter button.selected,
+.phone-shell:not(.theme-wise) .name-picker button.selected,
+.phone-shell:not(.theme-wise) .profile-options button.selected,
+.phone-shell:not(.theme-wise) .payer-selector button.selected,
+.phone-shell:not(.theme-wise) .shared-book-toggle.selected,
+.phone-shell:not(.theme-wise) .fixed-expense-item button:not(.ghost-icon) {
+  border-radius: 16px;
+  background: var(--lime);
+  color: var(--deep);
+  box-shadow: 0 14px 28px rgba(183, 255, 22, 0.22);
+}
+
+.phone-shell:not(.theme-wise) .secondary-action {
+  border-radius: 16px;
+  background: var(--lime);
+  color: var(--deep);
+}
+
+.phone-shell:not(.theme-wise) .category-icon,
+.phone-shell:not(.theme-wise) .quick-categories button .category-icon,
+.phone-shell:not(.theme-wise) .expense-category-grid .category-icon,
+.phone-shell:not(.theme-wise) .category-tile .category-icon {
+  border-radius: 50%;
+}
+
+.phone-shell:not(.theme-wise) .quick-categories button.selected .category-icon,
+.phone-shell:not(.theme-wise) .expense-category-grid button.selected .category-icon,
+.phone-shell:not(.theme-wise) .category-tile.selected .category-icon,
+.phone-shell:not(.theme-wise) .icon-picker button.selected {
+  outline: 0;
+  background: var(--lime) !important;
+  color: var(--deep);
+}
+
+.phone-shell:not(.theme-wise) .hero-card {
+  padding: 22px;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(255, 255, 255, 0.26), transparent 28%),
+    radial-gradient(circle at 30% 92%, rgba(255, 255, 255, 0.14), transparent 36%),
+    linear-gradient(145deg, var(--lime) 0%, var(--accent-2) 56%, color-mix(in srgb, var(--accent-2) 70%, #111a25) 100%);
+  color: var(--hero-text);
+}
+
+.phone-shell:not(.theme-wise) .hero-card p {
+  color: color-mix(in srgb, var(--hero-text) 62%, transparent);
+}
+
+.phone-shell:not(.theme-wise) .hero-card strong {
+  color: var(--hero-text);
+  font-size: 36px;
+  font-weight: 760;
+  line-height: 1.08;
+}
+
+.phone-shell:not(.theme-wise) .transfer-line,
+.phone-shell:not(.theme-wise) .transfer-line b,
+.phone-shell:not(.theme-wise) .transfer-line.balanced {
+  color: var(--hero-text);
+}
+
+.phone-shell:not(.theme-wise) .ratio-bar {
+  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.phone-shell:not(.theme-wise) .ratio-a {
+  background: linear-gradient(135deg, var(--lime), var(--accent-2));
+  color: var(--deep);
+}
+
+.phone-shell:not(.theme-wise) .ratio-b {
+  background: linear-gradient(135deg, #3a4653, #252f3b);
+  color: var(--muted) !important;
+}
+
+.phone-shell:not(.theme-wise) .calculator-grid button.is-operator,
+.phone-shell:not(.theme-wise) .calculator-grid button.is-done,
+.phone-shell:not(.theme-wise) .quick-input-row button {
+  background: var(--lime);
+  color: var(--deep);
+}
+
+.phone-shell:not(.theme-wise) .bottom-nav {
+  border-top: 1px solid var(--line);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(15, 24, 34, 0.78);
+  box-shadow: 0 -18px 44px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(30px) saturate(155%);
+  -webkit-backdrop-filter: blur(30px) saturate(155%);
+}
+
+.phone-shell:not(.theme-wise) .bottom-nav button {
+  border-radius: 16px;
+}
+
+.phone-shell:not(.theme-wise) .panel:hover,
+.phone-shell:not(.theme-wise) .person-summary article:hover,
+.phone-shell:not(.theme-wise) .hero-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.44);
+}
+
+/* Wise-inspired redesign from DESIGN.md */
+.phone-shell,
+.phone-shell.theme-dream,
+.phone-shell.theme-white {
+  color: var(--ink);
+  font-feature-settings: "calt" 1;
+  background: var(--paper);
+}
+
+.profile-gate,
+.hero-card,
+.panel,
+.person-summary article {
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.profile-gate,
+.panel,
+.person-summary article {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.profile-gate::before,
+.profile-gate::after,
+.hero-card::before,
+.hero-card::after,
+.panel::before,
+.panel::after,
+.person-summary article::before,
+.person-summary article::after,
+.bottom-nav::before {
+  display: none;
+}
+
+.panel:hover,
+.person-summary article:hover,
+.hero-card:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
+h1 {
+  color: var(--ink);
+  font-size: clamp(34px, 9vw, 54px);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: 0;
+}
+
+h2,
+.panel-title h2,
+.quick-entry-title h2 {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+label,
+.muted-label,
+.panel-title,
+.field-heading,
+.quick-entry-title p,
+.record-main span,
+.record-main small,
+.person-summary span,
+.person-summary small,
+.fixed-expense-toggle small {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.cloud-pill,
+.month-bar label,
+.setup-switch,
+.record-filter,
+.repeat-list button,
+.member-list div,
+.profile-options button,
+.theme-options button,
+.inline-category-maker,
+.panel-menu,
+.panel-menu-button,
+.ghost-icon,
+.confirm-card,
+.payer-selector button,
+.shared-book-toggle,
+input,
+select,
+textarea,
+.quick-input-row,
+.calculator-pad,
+.calculator-display,
+.calculator-grid button,
+.expense-category-grid button,
+.icon-picker button,
+.name-picker button,
+.fixed-expense-item {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+input,
+select,
+textarea {
+  min-height: 48px;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--lime);
+  outline: 0;
+  box-shadow: rgb(134, 134, 133) 0 0 0 1px inset;
+}
+
+.quick-add,
+.primary-action,
+.copy-code,
+.bottom-nav button.is-active,
+.setup-switch button.selected,
+.record-filter button.selected,
+.name-picker button.selected,
+.profile-options button.selected,
+.payer-selector button.selected,
+.shared-book-toggle.selected,
+.fixed-expense-item button:not(.ghost-icon) {
+  border-radius: 9999px;
+  background: var(--lime);
+  color: var(--deep);
+  box-shadow: none;
+}
+
+.quick-add,
+.primary-action,
+.secondary-action,
+.copy-code,
+.bottom-nav button,
+.setup-switch button,
+.record-filter button,
+.name-picker button,
+.profile-options button,
+.payer-selector button,
+.shared-book-toggle,
+.theme-options button,
+.quick-input-row button,
+.calculator-grid button,
+.expense-category-grid button,
+.icon-picker button,
+.category-tile {
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.quick-add:hover,
+.primary-action:hover,
+.copy-code:hover,
+.bottom-nav button:hover,
+.setup-switch button:hover,
+.record-filter button:hover,
+.name-picker button:hover,
+.profile-options button:hover,
+.payer-selector button:hover,
+.shared-book-toggle:hover,
+.theme-options button:hover,
+.quick-input-row button:hover,
+.calculator-grid button:hover,
+.expense-category-grid button:hover,
+.icon-picker button:hover,
+.category-tile:hover {
+  transform: scale(1.05);
+}
+
+button:active,
+.quick-add:active,
+.primary-action:active,
+.bottom-nav button:active {
+  transform: scale(0.95);
+}
+
+.secondary-action {
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: rgba(22, 51, 0, 0.08);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.quick-entry,
+.entry-panel {
+  padding: 18px;
+}
+
+.category-icon,
+.quick-categories button .category-icon,
+.expense-category-grid .category-icon,
+.category-tile .category-icon {
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.quick-categories button.selected .category-icon,
+.expense-category-grid button.selected .category-icon,
+.category-tile.selected .category-icon,
+.icon-picker button.selected {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+  background: var(--lime) !important;
+  color: var(--deep);
+}
+
+.hero-card {
+  background: #e2f6d5;
+  color: var(--hero-text);
+}
+
+.hero-card p,
+.transfer-line,
+.transfer-line b,
+.transfer-line.balanced {
+  color: var(--hero-text);
+}
+
+.hero-card strong {
+  font-size: clamp(34px, 9vw, 54px);
+  font-weight: 900;
+  line-height: 0.9;
+}
+
+.hero-divider {
+  background: rgba(14, 15, 12, 0.12);
+}
+
+.ratio-bar {
+  min-height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: #e8ebe6;
+  box-shadow: none;
+}
+
+.ratio-a {
+  background: var(--lime);
+  color: var(--deep);
+}
+
+.ratio-b {
+  background: #0e0f0c;
+  color: #ffffff !important;
+}
+
+.calculator-pad {
+  background: #f4f7f0;
+}
+
+.calculator-grid button.is-operator,
+.calculator-grid button.is-done,
+.quick-input-row button {
+  background: var(--lime);
+  color: var(--deep);
+}
+
+.bottom-nav {
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+  box-shadow: rgba(14, 15, 12, 0.12) 0 0 0 1px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.bottom-nav button {
+  border-radius: 9999px;
+  color: var(--muted);
+}
+
+.theme-swatch {
+  border-radius: 9999px;
+}
+
+.neon-swatch {
+  background: #b7ff16;
+}
+
+.dream-swatch {
+  background: #ffd6ff;
+}
+
+.white-swatch {
+  background: #ffffff;
+  border: 1px solid var(--line);
 }
 
 button,

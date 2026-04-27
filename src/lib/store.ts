@@ -39,6 +39,7 @@ type ExpenseRow = {
   exchange_rate_to_hkd: number | string
   hkd_amount: number | string
   payer_key: Member['id']
+  is_shared?: boolean | null
   category_id: string | null
   split_mode: SplitMode
   note: string | null
@@ -205,6 +206,7 @@ function mapExpense(row: ExpenseRow): Expense {
     exchangeRateToHkd: toMoney(row.exchange_rate_to_hkd),
     hkdAmount: toMoney(row.hkd_amount),
     payerId: row.payer_key,
+    isShared: row.is_shared ?? true,
     categoryId: row.category_id ?? 'other',
     splitMode: row.split_mode,
     split: {
@@ -296,7 +298,7 @@ export async function loadCloudHousehold(householdId: string): Promise<AppData> 
       .order('created_at'),
     client
       .from('expenses')
-      .select('id,household_id,expense_date,title,original_amount,original_currency,exchange_rate_to_hkd,hkd_amount,payer_key,category_id,split_mode,note,rate_source,created_at,expense_splits(member_key,hkd_amount)')
+      .select('id,household_id,expense_date,title,original_amount,original_currency,exchange_rate_to_hkd,hkd_amount,payer_key,is_shared,category_id,split_mode,note,rate_source,created_at,expense_splits(member_key,hkd_amount)')
       .eq('household_id', householdId)
       .order('expense_date', { ascending: false })
       .order('created_at', { ascending: false }),
@@ -430,6 +432,7 @@ export async function insertCloudExpense(expense: Expense) {
     exchange_rate_to_hkd: expense.exchangeRateToHkd,
     hkd_amount: expense.hkdAmount,
     payer_key: expense.payerId,
+    is_shared: expense.isShared ?? true,
     category_id: expense.categoryId,
     split_mode: expense.splitMode,
     note: expense.note,
@@ -467,6 +470,7 @@ export async function updateCloudExpense(expense: Expense) {
       exchange_rate_to_hkd: expense.exchangeRateToHkd,
       hkd_amount: expense.hkdAmount,
       payer_key: expense.payerId,
+      is_shared: expense.isShared ?? true,
       category_id: expense.categoryId,
       split_mode: expense.splitMode,
       note: expense.note,

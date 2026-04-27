@@ -57,6 +57,7 @@ create table public.expenses (
   exchange_rate_to_hkd numeric(18, 8) not null,
   hkd_amount numeric(12, 2) not null,
   payer_key text not null check (payer_key in ('personA', 'personB')),
+  is_shared boolean not null default true,
   category_id uuid references public.categories(id) on delete set null,
   split_mode text not null check (split_mode in ('equal', 'personA', 'personB', 'custom')),
   note text not null default '',

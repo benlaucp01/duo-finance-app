@@ -86,8 +86,9 @@ import { isSupabaseConfigured, supabase } from './lib/supabase'
 import type { AppData, Category, CurrencyCode, Expense, Member, SplitMode } from './types'
 
 type Tab = 'overview' | 'add' | 'records' | 'categories' | 'settings'
-type ThemeName = 'neon' | 'dream' | 'white'
+type ThemeName = 'neon' | 'dream' | 'white' | 'wise'
 type RecordFilter = Member['id'] | 'all'
+type RecordAccountFilter = 'all' | 'personal' | 'shared'
 type CalculatorTarget = 'quick' | 'expense' | 'repeat' | 'fixed'
 type FixedExpenseTemplate = {
   id: string
@@ -104,6 +105,7 @@ type ExpenseFormState = {
   amount: string
   currency: CurrencyCode
   payerId: Member['id'] | ''
+  isShared: boolean
   categoryId: string
   splitMode: SplitMode
   customPersonA: string
@@ -124,6 +126,7 @@ const initialForm: ExpenseFormState = {
   amount: '',
   currency: 'HKD',
   payerId: '',
+  isShared: false,
   categoryId: 'food',
   splitMode: 'equal',
   customPersonA: '',
@@ -237,6 +240,7 @@ function App() {
   const [isFixedExpenseOpen, setIsFixedExpenseOpen] = useState(false)
   const [repeatDraft, setRepeatDraft] = useState<{ expense: Expense; amount: string } | null>(null)
   const [recordFilter, setRecordFilter] = useState<RecordFilter>('all')
+  const [recordAccountFilter, setRecordAccountFilter] = useState<RecordAccountFilter>('all')
   const [isQuickSaving, setIsQuickSaving] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
@@ -357,9 +361,13 @@ function App() {
   }, [data, fixedExpenses])
 
   const monthExpenses = useMemo(() => (data ? expensesForMonth(data.expenses, month) : []), [data, month])
+  const sharedMonthExpenses = useMemo(
+    () => monthExpenses.filter((expense) => expense.isShared !== false),
+    [monthExpenses],
+  )
   const settlement = useMemo(
-    () => calculateSettlement(monthExpenses, data?.household.settlementRatio),
-    [data?.household.settlementRatio, monthExpenses],
+    () => calculateSettlement(sharedMonthExpenses, data?.household.settlementRatio),
+    [data?.household.settlementRatio, sharedMonthExpenses],
   )
 
   async function refreshCloudData() {
@@ -466,13 +474,41 @@ function App() {
   const otherProfile = currentProfile && appData.household.members.find((member) => member.id !== currentProfile.id)
   const otherName = otherProfile?.name ?? '對方'
   const myExpenses = currentProfile ? monthExpenses.filter((expense) => expense.payerId === currentProfile.id) : []
-  const myPaid = currentProfile ? settlement.paid[currentProfile.id] : 0
+  const personalOnlyTotals = monthExpenses.reduce(
+    (totals, expense) => {
+      if (expense.isShared === false) {
+        totals[expense.payerId] = roundMoney(totals[expense.payerId] + expense.hkdAmount)
+      }
+      return totals
+    },
+    { personA: 0, personB: 0 },
+  )
+  const personalMonthlyTotals = {
+    personA: roundMoney(personalOnlyTotals.personA + settlement.owed.personA),
+    personB: roundMoney(personalOnlyTotals.personB + settlement.owed.personB),
+  }
+  const myPaid = currentProfile ? personalMonthlyTotals[currentProfile.id] : 0
   const myOwed = currentProfile ? settlement.owed[currentProfile.id] : 0
-  const paidTotal = settlement.paid.personA + settlement.paid.personB
-  const personAPercentage = paidTotal > 0 ? Math.round((settlement.paid.personA / paidTotal) * 100) : 50
+  const paidTotal = personalMonthlyTotals.personA + personalMonthlyTotals.personB
+  const personAPercentage = paidTotal > 0 ? Math.round((personalMonthlyTotals.personA / paidTotal) * 100) : 50
   const personBPercentage = paidTotal > 0 ? 100 - personAPercentage : 50
+  const myCategoryTotals = Object.values(
+    myExpenses.reduce<Record<string, { categoryId: string; amount: number }>>((groups, expense) => {
+      const current = groups[expense.categoryId] ?? { categoryId: expense.categoryId, amount: 0 }
+      current.amount = roundMoney(current.amount + expense.hkdAmount)
+      groups[expense.categoryId] = current
+      return groups
+    }, {}),
+  ).sort((a, b) => b.amount - a.amount)
   const recentTemplates = [...appData.expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6)
-  const recordExpenses = monthExpenses.filter((expense) => recordFilter === 'all' || expense.payerId === recordFilter)
+  const recordExpenses = monthExpenses.filter((expense) => {
+    const matchesPerson = recordFilter === 'all' || expense.payerId === recordFilter
+    const matchesAccount =
+      recordAccountFilter === 'all'
+      || (recordAccountFilter === 'personal' && expense.isShared === false)
+      || (recordAccountFilter === 'shared' && expense.isShared !== false)
+    return matchesPerson && matchesAccount
+  })
   const quickCategories = buildQuickCategories(appData.categories, appData.expenses, quickCategoryIds)
 
   function updateData(next: AppData) {
@@ -543,6 +579,7 @@ function App() {
     const expenseTitle = form.title.trim() || categoryName(form.categoryId)
     const selectedPayer = appData.household.members.find((member) => member.id === form.payerId)
     const selectedPayerId: Member['id'] = selectedPayer?.id ?? currentProfile.id
+    const splitMode: SplitMode = form.isShared ? 'equal' : selectedPayerId
 
     return {
       id: existing?.id ?? crypto.randomUUID(),
@@ -554,9 +591,10 @@ function App() {
       exchangeRateToHkd: rateResult.rate,
       hkdAmount,
       payerId: selectedPayerId,
+      isShared: form.isShared,
       categoryId: form.categoryId,
-      splitMode: form.splitMode,
-      split: buildSplit(form.splitMode, hkdAmount, Number(form.customPersonA) || 0),
+      splitMode,
+      split: buildSplit(splitMode, hkdAmount, Number(form.customPersonA) || 0),
       note: form.note.trim(),
       rateSource: rateResult.source,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
@@ -630,6 +668,7 @@ function App() {
       exchangeRateToHkd: 1,
       hkdAmount,
       payerId: overrides?.payerId ?? currentProfile.id,
+      isShared: source ? source.isShared !== false : false,
       categoryId,
       splitMode,
       split,
@@ -704,6 +743,7 @@ function App() {
         exchangeRateToHkd: 1,
         hkdAmount,
         payerId: currentData.household.members.some((member) => member.id === template.payerId) ? template.payerId : 'personA',
+        isShared: false,
         categoryId: template.categoryId,
         splitMode: template.splitMode,
         split: buildSplit(template.splitMode, hkdAmount, 0),
@@ -842,6 +882,7 @@ function App() {
       amount: String(expense.originalAmount),
       currency: expense.originalCurrency,
       payerId: expense.payerId,
+      isShared: expense.isShared !== false,
       categoryId: expense.categoryId,
       splitMode: expense.splitMode,
       customPersonA: String(expense.split.personA),
@@ -1161,14 +1202,14 @@ function App() {
               <div className="ratio-b" style={{ width: `${personBPercentage}%` }}>{personBPercentage}%</div>
             </div>
             <div className="ratio-details">
-              <div><span>{personA.name} 總支出</span><strong>{formatMoney(settlement.paid.personA)}</strong></div>
-              <div><span>{personB.name} 總支出</span><strong>{formatMoney(settlement.paid.personB)}</strong></div>
+              <div><span>{personA.name} 月結後個人支出</span><strong>{formatMoney(personalMonthlyTotals.personA)}</strong></div>
+              <div><span>{personB.name} 月結後個人支出</span><strong>{formatMoney(personalMonthlyTotals.personB)}</strong></div>
             </div>
           </section>
 
           <section className="panel">
             <div className="panel-title"><Coins size={18} /><h2>你的分類支出</h2></div>
-            {myExpenses.length === 0 ? <p className="empty-text">你這個月份還未有支出。</p> : settlement.byCategory.map((item) => (
+            {myExpenses.length === 0 ? <p className="empty-text">你這個月份還未有支出。</p> : myCategoryTotals.map((item) => (
               <div key={item.categoryId} className="stat-row">
                 <span><i style={{ background: categoryMeta(item.categoryId)?.color ?? '#94a3b8' }} />{categoryName(item.categoryId)}</span>
                 <b>{formatMoney(item.amount)}</b>
@@ -1177,8 +1218,8 @@ function App() {
           </section>
 
           <section className="panel">
-            <div className="panel-title"><CircleDollarSign size={18} /><h2>全月共同總額</h2></div>
-            <div className="stat-row"><span>雙方總支出</span><b>{formatMoney(settlement.totalHkd)}</b></div>
+            <div className="panel-title"><CircleDollarSign size={18} /><h2>全月共同帳簿</h2></div>
+            <div className="stat-row"><span>共同帳簿總支出</span><b>{formatMoney(settlement.totalHkd)}</b></div>
             <div className="stat-row"><span>月結方向</span><b>{personalSettlementText()}</b></div>
           </section>
 
@@ -1186,7 +1227,7 @@ function App() {
             <p>今個月結算</p>
             <strong>{personalSettlementText()}</strong>
             <div className="hero-divider" />
-            <div className="transfer-line"><span>你已付</span><b>{formatMoney(myPaid)}</b><span>你應負擔 {formatMoney(myOwed)}</span></div>
+            <div className="transfer-line"><span>你的月結後個人支出</span><b>{formatMoney(myPaid)}</b><span>共同帳簿應負擔 {formatMoney(myOwed)}</span></div>
           </article>
         </section>
       )}
@@ -1213,6 +1254,14 @@ function App() {
                 })}
               </div>
             </div>
+            <button
+              type="button"
+              className={`shared-book-toggle ${form.isShared ? 'selected' : ''}`}
+              onClick={() => setForm({ ...form, isShared: !form.isShared })}
+            >
+              <Copy size={17} />
+              {form.isShared ? '已加入共同帳簿' : '加入共同帳簿'}
+            </button>
             <label className="hero-input">項目<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" /></label>
             <div className="amount-currency-row">
               <label>金額<input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" /></label>
@@ -1304,7 +1353,12 @@ function App() {
           </section>
           <section className="panel">
             <div className="panel-title"><List size={18} /><h2>雙方支出明細</h2></div>
-            <div className="record-filter">
+            <div className="record-filter account-filter" aria-label="帳簿類型">
+              <button type="button" className={recordAccountFilter === 'all' ? 'selected' : ''} onClick={() => setRecordAccountFilter('all')}>全部帳戶</button>
+              <button type="button" className={recordAccountFilter === 'personal' ? 'selected' : ''} onClick={() => setRecordAccountFilter('personal')}>個人帳戶</button>
+              <button type="button" className={recordAccountFilter === 'shared' ? 'selected' : ''} onClick={() => setRecordAccountFilter('shared')}>共同帳簿</button>
+            </div>
+            <div className="record-filter person-filter" aria-label="付款人">
               <button type="button" className={recordFilter === 'all' ? 'selected' : ''} onClick={() => setRecordFilter('all')}>全部</button>
               {appData.household.members.map((member) => <button key={member.id} type="button" className={recordFilter === member.id ? 'selected' : ''} onClick={() => setRecordFilter(member.id)}>{member.name}</button>)}
             </div>
@@ -1313,7 +1367,7 @@ function App() {
                 <div className="record-dot" style={{ background: categoryMeta(expense.categoryId)?.color ?? '#94a3b8' }} />
                 <div className="record-main">
                   <strong>{expense.title}</strong>
-                  <span>{expense.date} · {categoryName(expense.categoryId)} · {appData.household.members.find((member) => member.id === expense.payerId)?.name}</span>
+                  <span>{expense.date} · {categoryName(expense.categoryId)} · {appData.household.members.find((member) => member.id === expense.payerId)?.name} · {expense.isShared === false ? '個人' : '共同帳簿'}</span>
                   <small>{formatMoney(expense.originalAmount, expense.originalCurrency)}{expense.originalCurrency !== 'HKD' ? ` · 匯率 ${expense.exchangeRateToHkd.toFixed(4)}` : ''}</small>
                 </div>
                 <div className="record-side">
@@ -1491,7 +1545,8 @@ function App() {
             <div className="theme-options">
               <button type="button" className={theme === 'neon' ? 'selected' : ''} onClick={() => setTheme('neon')}><span className="theme-swatch neon-swatch" /><strong>Neon Dark</strong><small>深色金融風格</small></button>
               <button type="button" className={theme === 'dream' ? 'selected' : ''} onClick={() => setTheme('dream')}><span className="theme-swatch dream-swatch" /><strong>Dream Glow</strong><small>夢幻柔光色彩</small></button>
-              <button type="button" className={theme === 'white' ? 'selected' : ''} onClick={() => setTheme('white')}><span className="theme-swatch white-swatch" /><strong>Clean White</strong><small>純白簡潔風格</small></button>
+              <button type="button" className={theme === 'white' ? 'selected' : ''} onClick={() => setTheme('white')}><span className="theme-swatch white-swatch" /><strong>Clean White</strong><small>純白清晰風格</small></button>
+              <button type="button" className={theme === 'wise' ? 'selected' : ''} onClick={() => setTheme('wise')}><span className="theme-swatch wise-swatch" /><strong>Wise Green</strong><small>青檸綠大圓角風格</small></button>
             </div>
           </section>
           {cloudMode && <section className="panel"><div className="panel-title"><Cloud size={18} /><h2>雲端帳戶</h2></div><p className="empty-text">{user?.email}</p><button className="secondary-action" type="button" onClick={() => void signOut()}><LogOut size={18} />登出</button></section>}

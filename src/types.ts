@@ -50,6 +50,7 @@ export type Expense = {
   exchangeRateToHkd: number
   hkdAmount: number
   payerId: Member['id']
+  isShared?: boolean
   categoryId: string
   splitMode: SplitMode
   split: ExpenseSplit
