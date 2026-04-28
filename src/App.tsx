@@ -232,6 +232,7 @@ function App() {
   const [quickTitle, setQuickTitle] = useState('')
   const [quickAmount, setQuickAmount] = useState('')
   const [quickCategoryId, setQuickCategoryId] = useState('food')
+  const [quickIsShared, setQuickIsShared] = useState(false)
   const [quickCategoryIds, setQuickCategoryIds] = useState<string[]>(() => loadQuickCategoryIds())
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseTemplate[]>(() => loadFixedExpenses())
   const [fixedTitle, setFixedTitle] = useState('')
@@ -241,6 +242,7 @@ function App() {
   const [repeatDraft, setRepeatDraft] = useState<{ expense: Expense; amount: string } | null>(null)
   const [recordFilter, setRecordFilter] = useState<RecordFilter>('all')
   const [recordAccountFilter, setRecordAccountFilter] = useState<RecordAccountFilter>('all')
+  const [isRecordManaging, setIsRecordManaging] = useState(false)
   const [isQuickSaving, setIsQuickSaving] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
@@ -509,6 +511,7 @@ function App() {
       || (recordAccountFilter === 'shared' && expense.isShared !== false)
     return matchesPerson && matchesAccount
   })
+  const recordTotal = roundMoney(recordExpenses.reduce((total, expense) => total + expense.hkdAmount, 0))
   const quickCategories = buildQuickCategories(appData.categories, appData.expenses, quickCategoryIds)
 
   function updateData(next: AppData) {
@@ -653,10 +656,11 @@ function App() {
     }
   }
 
-  async function addQuickExpense(title: string, amount: number, categoryId: string, source?: Expense, overrides?: Partial<Pick<Expense, 'date' | 'payerId'>>) {
+  async function addQuickExpense(title: string, amount: number, categoryId: string, source?: Expense, overrides?: Partial<Pick<Expense, 'date' | 'payerId' | 'isShared'>>) {
     if (!currentProfile) throw new Error('請先選擇你的身份。')
     const hkdAmount = roundMoney(amount)
-    const splitMode = source?.splitMode ?? 'equal'
+    const isShared = overrides?.isShared ?? (source ? source.isShared !== false : false)
+    const splitMode = isShared ? (source?.splitMode ?? 'equal') : (overrides?.payerId ?? currentProfile.id)
     const split = buildSplit(splitMode, hkdAmount, source?.split.personA ?? 0)
     const expense: Expense = {
       id: crypto.randomUUID(),
@@ -668,7 +672,7 @@ function App() {
       exchangeRateToHkd: 1,
       hkdAmount,
       payerId: overrides?.payerId ?? currentProfile.id,
-      isShared: source ? source.isShared !== false : false,
+      isShared,
       categoryId,
       splitMode,
       split,
@@ -781,7 +785,7 @@ function App() {
     if (!amount || amount <= 0) return setStatusMessage('請輸入有效金額。')
     setIsQuickSaving(true)
     try {
-      await addQuickExpense(quickTitle.trim(), amount, quickCategoryId)
+      await addQuickExpense(quickTitle.trim(), amount, quickCategoryId, undefined, { isShared: quickIsShared })
       rememberQuickCategory(quickCategoryId)
       setQuickTitle('')
       setQuickAmount('')
@@ -1096,6 +1100,14 @@ function App() {
             </div>
             <div className="quick-fields">
               <input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="項目，例如：麥當勞晚餐" aria-label="快速輸入項目" />
+              <button
+                type="button"
+                className={`shared-book-toggle quick-shared-toggle ${quickIsShared ? 'selected' : ''}`}
+                onClick={() => setQuickIsShared((current) => !current)}
+              >
+                <Copy size={16} />
+                {quickIsShared ? '已加入共同帳簿' : '加入共同帳簿'}
+              </button>
               <div className="quick-input-row">
                 <span>HK$</span>
                 <input readOnly inputMode="none" value={quickAmount} onFocus={() => openCalculator('quick', quickAmount)} onClick={() => openCalculator('quick', quickAmount)} placeholder="金額" aria-label="快速輸入金額" />
@@ -1352,7 +1364,17 @@ function App() {
             )}
           </section>
           <section className="panel">
-            <div className="panel-title"><List size={18} /><h2>雙方支出明細</h2></div>
+            <div className="panel-title record-panel-title">
+              <span><List size={18} /><h2>雙方支出明細</h2></span>
+              <button
+                type="button"
+                className={`panel-menu-button ${isRecordManaging ? 'selected' : ''}`}
+                onClick={() => setIsRecordManaging((current) => !current)}
+                aria-label="管理支出記錄"
+              >
+                <Settings size={18} />
+              </button>
+            </div>
             <div className="record-filter account-filter" aria-label="帳簿類型">
               <button type="button" className={recordAccountFilter === 'all' ? 'selected' : ''} onClick={() => setRecordAccountFilter('all')}>全部帳戶</button>
               <button type="button" className={recordAccountFilter === 'personal' ? 'selected' : ''} onClick={() => setRecordAccountFilter('personal')}>個人帳戶</button>
@@ -1361,6 +1383,10 @@ function App() {
             <div className="record-filter person-filter" aria-label="付款人">
               <button type="button" className={recordFilter === 'all' ? 'selected' : ''} onClick={() => setRecordFilter('all')}>全部</button>
               {appData.household.members.map((member) => <button key={member.id} type="button" className={recordFilter === member.id ? 'selected' : ''} onClick={() => setRecordFilter(member.id)}>{member.name}</button>)}
+            </div>
+            <div className="record-total">
+              <span>目前篩選總支出</span>
+              <strong>{formatMoney(recordTotal)}</strong>
             </div>
             {recordExpenses.length === 0 ? <p className="empty-text">這個月份還未有支出。</p> : recordExpenses.map((expense) => (
               <article key={expense.id} className="record-item">
@@ -1372,8 +1398,12 @@ function App() {
                 </div>
                 <div className="record-side">
                   <b>{formatMoney(expense.hkdAmount)}</b>
-                  <button type="button" className="ghost-icon" onClick={() => startEditExpense(expense)} title="修改支出"><Pencil size={17} /></button>
-                  <button type="button" className="ghost-icon" onClick={() => void handleDeleteExpense(expense.id)} title="刪除支出"><Trash2 size={17} /></button>
+                  {isRecordManaging && (
+                    <div className="record-actions">
+                      <button type="button" className="ghost-icon" onClick={() => startEditExpense(expense)} title="修改支出"><Pencil size={17} /></button>
+                      <button type="button" className="ghost-icon" onClick={() => void handleDeleteExpense(expense.id)} title="刪除支出"><Trash2 size={17} /></button>
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
