@@ -55,6 +55,9 @@ export type Expense = {
   splitMode: SplitMode
   split: ExpenseSplit
   note: string
+  photoDataUrl?: string
+  photoCaption?: string
+  notifyOther?: boolean
   rateSource: 'hkd' | 'auto' | 'manual' | 'fallback'
   createdAt: string
 }

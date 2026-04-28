@@ -43,6 +43,9 @@ type ExpenseRow = {
   category_id: string | null
   split_mode: SplitMode
   note: string | null
+  photo_data_url?: string | null
+  photo_caption?: string | null
+  notify_other?: boolean | null
   rate_source: Expense['rateSource']
   created_at: string
   expense_splits?: Array<{ member_key: Member['id']; hkd_amount: number | string }>
@@ -214,6 +217,9 @@ function mapExpense(row: ExpenseRow): Expense {
       personB: toMoney(personB?.hkd_amount),
     },
     note: row.note ?? '',
+    photoDataUrl: row.photo_data_url ?? '',
+    photoCaption: row.photo_caption ?? '',
+    notifyOther: row.notify_other ?? false,
     rateSource: row.rate_source,
     createdAt: row.created_at,
   }
@@ -298,7 +304,7 @@ export async function loadCloudHousehold(householdId: string): Promise<AppData> 
       .order('created_at'),
     client
       .from('expenses')
-      .select('id,household_id,expense_date,title,original_amount,original_currency,exchange_rate_to_hkd,hkd_amount,payer_key,is_shared,category_id,split_mode,note,rate_source,created_at,expense_splits(member_key,hkd_amount)')
+      .select('id,household_id,expense_date,title,original_amount,original_currency,exchange_rate_to_hkd,hkd_amount,payer_key,is_shared,category_id,split_mode,note,photo_data_url,photo_caption,notify_other,rate_source,created_at,expense_splits(member_key,hkd_amount)')
       .eq('household_id', householdId)
       .order('expense_date', { ascending: false })
       .order('created_at', { ascending: false }),
@@ -436,6 +442,9 @@ export async function insertCloudExpense(expense: Expense) {
     category_id: expense.categoryId,
     split_mode: expense.splitMode,
     note: expense.note,
+    photo_data_url: expense.photoDataUrl || null,
+    photo_caption: expense.photoCaption || null,
+    notify_other: expense.notifyOther ?? false,
     rate_source: expense.rateSource,
     created_by: user.id,
   })
@@ -474,6 +483,9 @@ export async function updateCloudExpense(expense: Expense) {
       category_id: expense.categoryId,
       split_mode: expense.splitMode,
       note: expense.note,
+      photo_data_url: expense.photoDataUrl || null,
+      photo_caption: expense.photoCaption || null,
+      notify_other: expense.notifyOther ?? false,
       rate_source: expense.rateSource,
     })
     .eq('id', expense.id)

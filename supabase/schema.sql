@@ -61,6 +61,9 @@ create table public.expenses (
   category_id uuid references public.categories(id) on delete set null,
   split_mode text not null check (split_mode in ('equal', 'personA', 'personB', 'custom')),
   note text not null default '',
+  photo_data_url text,
+  photo_caption text not null default '',
+  notify_other boolean not null default false,
   rate_source text not null check (rate_source in ('hkd', 'auto', 'manual', 'fallback')),
   created_by uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now()

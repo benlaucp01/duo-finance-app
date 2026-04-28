@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   Car,
+  Camera,
   Check,
   ChevronDown,
   CircleDollarSign,
@@ -18,6 +19,7 @@ import {
   HeartPulse,
   Home,
   HomeIcon,
+  Image as ImageIcon,
   Landmark,
   Laptop,
   List,
@@ -29,6 +31,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Send,
   Shirt,
   Settings,
   ShoppingBag,
@@ -41,10 +44,11 @@ import {
   Utensils,
   WalletCards,
   Wifi,
+  X,
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent, TouchEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
 import './App.css'
 import { getExchangeRateToHkd } from './lib/exchangeRates'
@@ -89,7 +93,7 @@ type Tab = 'overview' | 'add' | 'records' | 'categories' | 'settings'
 type ThemeName = 'neon' | 'dream' | 'white' | 'wise'
 type RecordFilter = Member['id'] | 'all'
 type RecordAccountFilter = 'all' | 'personal' | 'shared'
-type CalculatorTarget = 'quick' | 'expense' | 'repeat' | 'fixed'
+type CalculatorTarget = 'quick' | 'expense' | 'repeat' | 'fixed' | 'story'
 type FixedExpenseTemplate = {
   id: string
   title: string
@@ -110,6 +114,9 @@ type ExpenseFormState = {
   splitMode: SplitMode
   customPersonA: string
   note: string
+  photoDataUrl: string
+  photoCaption: string
+  notifyOther: boolean
   manualRate: string
   useManualRate: boolean
 }
@@ -131,6 +138,9 @@ const initialForm: ExpenseFormState = {
   splitMode: 'equal',
   customPersonA: '',
   note: '',
+  photoDataUrl: '',
+  photoCaption: '',
+  notifyOther: false,
   manualRate: '',
   useManualRate: false,
 }
@@ -234,6 +244,15 @@ function App() {
   const [quickCategoryId, setQuickCategoryId] = useState('food')
   const [quickIsShared, setQuickIsShared] = useState(false)
   const [quickCategoryIds, setQuickCategoryIds] = useState<string[]>(() => loadQuickCategoryIds())
+  const [isStoryCameraOpen, setIsStoryCameraOpen] = useState(false)
+  const [storyPhotoDataUrl, setStoryPhotoDataUrl] = useState('')
+  const [storyTitle, setStoryTitle] = useState('')
+  const [storyCaption, setStoryCaption] = useState('')
+  const [storyAmount, setStoryAmount] = useState('')
+  const [storyCategoryId, setStoryCategoryId] = useState('food')
+  const [storyIsShared, setStoryIsShared] = useState(false)
+  const [storyNotifyOther, setStoryNotifyOther] = useState(true)
+  const [isStorySaving, setIsStorySaving] = useState(false)
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseTemplate[]>(() => loadFixedExpenses())
   const [fixedTitle, setFixedTitle] = useState('')
   const [fixedAmount, setFixedAmount] = useState('')
@@ -260,6 +279,8 @@ function App() {
   const [isRemovingCategories, setIsRemovingCategories] = useState(false)
   const fixedAutoRunKey = useRef('')
   const longPressTimer = useRef<number | null>(null)
+  const swipeCameraInputRef = useRef<HTMLInputElement | null>(null)
+  const swipeStart = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     localStorage.setItem(themeStorageKey, theme)
@@ -599,6 +620,9 @@ function App() {
       splitMode,
       split: buildSplit(splitMode, hkdAmount, Number(form.customPersonA) || 0),
       note: form.note.trim(),
+      photoDataUrl: form.photoDataUrl,
+      photoCaption: form.photoCaption.trim(),
+      notifyOther: form.notifyOther,
       rateSource: rateResult.source,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     } satisfies Expense
@@ -823,6 +847,130 @@ function App() {
     if (target === 'expense') setForm((current) => ({ ...current, amount: value }))
     if (target === 'repeat') setRepeatDraft((current) => (current ? { ...current, amount: value } : current))
     if (target === 'fixed') setFixedAmount(value)
+    if (target === 'story') setStoryAmount(value)
+  }
+
+  async function handleExpensePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    if (!file) return
+
+    try {
+      const photoDataUrl = await compressExpensePhoto(file)
+      setForm((current) => ({
+        ...current,
+        photoDataUrl,
+        photoCaption: current.photoCaption || current.note,
+      }))
+      setStatusMessage('相片已加入支出記錄。')
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '相片加入失敗。')
+    } finally {
+      event.currentTarget.value = ''
+    }
+  }
+
+  function openStoryCamera() {
+    setIsStoryCameraOpen(true)
+    setStatusMessage('')
+    swipeCameraInputRef.current?.click()
+  }
+
+  function closeStoryCamera() {
+    setIsStoryCameraOpen(false)
+    setCalculator((current) => (current?.target === 'story' ? null : current))
+  }
+
+  function resetStoryCamera() {
+    setStoryPhotoDataUrl('')
+    setStoryTitle('')
+    setStoryCaption('')
+    setStoryAmount('')
+    setStoryCategoryId(quickCategoryId || 'food')
+    setStoryIsShared(false)
+    setStoryNotifyOther(true)
+  }
+
+  async function handleStoryPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    if (!file) return
+
+    try {
+      const photoDataUrl = await compressExpensePhoto(file)
+      setStoryPhotoDataUrl(photoDataUrl)
+      setIsStoryCameraOpen(true)
+      setStatusMessage('相片已準備好，可以加入支出資料。')
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '相片加入失敗。')
+    } finally {
+      event.currentTarget.value = ''
+    }
+  }
+
+  function handleShellTouchStart(event: TouchEvent<HTMLElement>) {
+    const touch = event.touches[0]
+    if (!touch || touch.clientX > 28 || isStoryCameraOpen) {
+      swipeStart.current = null
+      return
+    }
+    swipeStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  function handleShellTouchEnd(event: TouchEvent<HTMLElement>) {
+    const start = swipeStart.current
+    const touch = event.changedTouches[0]
+    swipeStart.current = null
+    if (!start || !touch) return
+
+    const deltaX = touch.clientX - start.x
+    const deltaY = Math.abs(touch.clientY - start.y)
+    if (deltaX > 86 && deltaY < 70) {
+      openStoryCamera()
+    }
+  }
+
+  async function handleStorySubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!currentProfile) return
+    const amount = Number(storyAmount)
+    if (!storyPhotoDataUrl) return setStatusMessage('請先拍照或選擇相片。')
+    if (!amount || amount <= 0) return setStatusMessage('請輸入有效金額。')
+
+    setIsStorySaving(true)
+    try {
+      const hkdAmount = roundMoney(amount)
+      const splitMode: SplitMode = storyIsShared ? 'equal' : currentProfile.id
+      const expense: Expense = {
+        id: crypto.randomUUID(),
+        householdId: appData.household.id,
+        date: todayInputValue(),
+        title: storyTitle.trim() || storyCaption.trim() || categoryName(storyCategoryId),
+        originalAmount: amount,
+        originalCurrency: 'HKD',
+        exchangeRateToHkd: 1,
+        hkdAmount,
+        payerId: currentProfile.id,
+        isShared: storyIsShared,
+        categoryId: storyCategoryId,
+        splitMode,
+        split: buildSplit(splitMode, hkdAmount, 0),
+        note: storyCaption.trim(),
+        photoDataUrl: storyPhotoDataUrl,
+        photoCaption: storyCaption.trim(),
+        notifyOther: storyNotifyOther,
+        rateSource: 'hkd',
+        createdAt: new Date().toISOString(),
+      }
+
+      await saveExpense(expense)
+      rememberQuickCategory(expense.categoryId)
+      resetStoryCamera()
+      closeStoryCamera()
+      setStatusMessage(storyNotifyOther ? '已用照片記錄支出，並標記通知對方。' : '已用照片記錄支出。')
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '照片支出儲存失敗。')
+    } finally {
+      setIsStorySaving(false)
+    }
   }
 
   async function handleCalculatorPress(key: string) {
@@ -891,6 +1039,9 @@ function App() {
       splitMode: expense.splitMode,
       customPersonA: String(expense.split.personA),
       note: expense.note,
+      photoDataUrl: expense.photoDataUrl ?? '',
+      photoCaption: expense.photoCaption ?? '',
+      notifyOther: expense.notifyOther ?? false,
       manualRate: String(expense.exchangeRateToHkd),
       useManualRate: expense.rateSource === 'manual',
     })
@@ -1054,7 +1205,11 @@ function App() {
   }
 
   return (
-    <main className={`phone-shell theme-${theme}`}>
+    <main className={`phone-shell theme-${theme}`} onTouchStart={handleShellTouchStart} onTouchEnd={handleShellTouchEnd}>
+      <input ref={swipeCameraInputRef} className="sr-only-camera-input" type="file" accept="image/*" capture="environment" onChange={handleStoryPhotoChange} />
+      <button type="button" className="edge-camera-trigger" onClick={openStoryCamera} aria-label="由左邊滑出拍照模式">
+        <Camera size={18} />
+      </button>
       <header className="app-header">
         <div>
           <p className="muted-label">Hi, {currentProfile.name}</p>
@@ -1317,6 +1472,31 @@ function App() {
               </div>
             )}
             <label>備註<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如：信用卡實際匯率、旅行地點等" /></label>
+            <section className="expense-photo-panel">
+              <div className="field-heading">
+                <span><Camera size={17} />支出照片</span>
+                <label className="photo-capture-button">
+                  <ImageIcon size={16} />
+                  拍照 / 選相
+                  <input type="file" accept="image/*" capture="environment" onChange={handleExpensePhotoChange} />
+                </label>
+              </div>
+              {form.photoDataUrl ? (
+                <article className="photo-preview-card">
+                  <img src={form.photoDataUrl} alt="支出照片預覽" />
+                  <button type="button" className="photo-remove-button" onClick={() => setForm({ ...form, photoDataUrl: '', photoCaption: '', notifyOther: false })} aria-label="移除相片">
+                    <X size={16} />
+                  </button>
+                </article>
+              ) : (
+                <div className="photo-empty-state">
+                  <Camera size={22} />
+                  <span>可以像限時動態一樣，為這筆支出加一張相和一句留言。</span>
+                </div>
+              )}
+              <label>相片留言<input value={form.photoCaption} onChange={(event) => setForm({ ...form, photoCaption: event.target.value })} placeholder="例如：今晚食得好滿足、記得下次你請" /></label>
+              <label className="toggle-line notify-toggle"><input type="checkbox" checked={form.notifyOther} onChange={(event) => setForm({ ...form, notifyOther: event.target.checked })} /><span><Mail size={16} />通知另一位用戶</span></label>
+            </section>
             <button className="primary-action" type="submit" disabled={isSaving}><Check size={18} />{isSaving ? '儲存中...' : editingExpenseId ? '更新支出' : '儲存支出'}</button>
             {editingExpenseId && <button className="secondary-action" type="button" onClick={() => { setEditingExpenseId(null); setForm(initialForm) }}>取消修改</button>}
             {statusMessage && <p className="status-message">{statusMessage}</p>}
@@ -1395,6 +1575,15 @@ function App() {
                   <strong>{expense.title}</strong>
                   <span>{expense.date} · {categoryName(expense.categoryId)} · {appData.household.members.find((member) => member.id === expense.payerId)?.name} · {expense.isShared === false ? '個人' : '共同帳簿'}</span>
                   <small>{formatMoney(expense.originalAmount, expense.originalCurrency)}{expense.originalCurrency !== 'HKD' ? ` · 匯率 ${expense.exchangeRateToHkd.toFixed(4)}` : ''}</small>
+                  {(expense.photoDataUrl || expense.photoCaption || expense.notifyOther) && (
+                    <div className="record-photo-story">
+                      {expense.photoDataUrl && <img src={expense.photoDataUrl} alt={`${expense.title} 支出照片`} />}
+                      <div>
+                        {expense.photoCaption && <p>{expense.photoCaption}</p>}
+                        {expense.notifyOther && <small><Mail size={13} />已標記通知對方</small>}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="record-side">
                   <b>{formatMoney(expense.hkdAmount)}</b>
@@ -1583,6 +1772,61 @@ function App() {
         </section>
       )}
 
+      {isStoryCameraOpen && (
+        <div className="story-camera-backdrop" role="dialog" aria-modal="true" aria-label="拍照加入支出" onClick={closeStoryCamera}>
+          <form className="story-camera-sheet" onSubmit={handleStorySubmit} onClick={(event) => event.stopPropagation()}>
+            <div className="story-sheet-handle" />
+            <div className="story-sheet-title">
+              <span><Camera size={18} />拍照支出</span>
+              <button type="button" className="ghost-icon" onClick={closeStoryCamera} aria-label="關閉拍照模式"><X size={18} /></button>
+            </div>
+            {storyPhotoDataUrl ? (
+              <article className="story-photo-frame">
+                <img src={storyPhotoDataUrl} alt="準備發送的支出照片" />
+                <button type="button" className="photo-remove-button" onClick={() => setStoryPhotoDataUrl('')} aria-label="重新拍照">
+                  <Camera size={16} />
+                </button>
+              </article>
+            ) : (
+              <button type="button" className="story-camera-empty" onClick={openStoryCamera}>
+                <Camera size={30} />
+                <strong>從左邊滑入，或按這裡拍照</strong>
+                <span>拍完後可以像限時動態一樣加留言和支出資料。</span>
+              </button>
+            )}
+            <div className="story-fields">
+              <input value={storyCaption} onChange={(event) => setStoryCaption(event.target.value)} placeholder="加一句留言，例如：今晚我先付" />
+              <input value={storyTitle} onChange={(event) => setStoryTitle(event.target.value)} placeholder="項目名稱，可留空用分類名稱" />
+              <div className="quick-input-row story-amount-row">
+                <span>HK$</span>
+                <input readOnly inputMode="none" value={storyAmount} onFocus={() => openCalculator('story', storyAmount)} onClick={() => openCalculator('story', storyAmount)} placeholder="金額" />
+              </div>
+              {calculator?.target === 'story' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
+              <div className="story-category-row" aria-label="拍照支出分類">
+                {appData.categories.map((category) => (
+                  <button key={category.id} type="button" className={storyCategoryId === category.id ? 'selected' : ''} onClick={() => setStoryCategoryId(category.id)}>
+                    <span className="category-icon" style={{ background: category.color }}><CategoryIcon category={category} /></span>
+                    <span>{category.name}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className={`shared-book-toggle ${storyIsShared ? 'selected' : ''}`} onClick={() => setStoryIsShared((current) => !current)}>
+                <Copy size={16} />
+                {storyIsShared ? '已加入共同帳簿' : '加入共同帳簿'}
+              </button>
+              <label className="toggle-line notify-toggle story-notify-toggle">
+                <input type="checkbox" checked={storyNotifyOther} onChange={(event) => setStoryNotifyOther(event.target.checked)} />
+                <span><Mail size={16} />通知另一位用戶</span>
+              </label>
+            </div>
+            <button className="story-send-button" type="submit" disabled={isStorySaving}>
+              <Send size={18} />
+              {isStorySaving ? '發送中...' : '發送給對方'}
+            </button>
+          </form>
+        </div>
+      )}
+
       <nav className="bottom-nav" aria-label="底部導覽">
         <button type="button" className={activeTab === 'overview' ? 'is-active' : ''} onClick={() => switchTab('overview')}><Home size={19} />總覽</button>
         <button type="button" className={activeTab === 'add' ? 'is-active' : ''} onClick={() => switchTab('add')}><Plus size={19} />新增</button>
@@ -1592,6 +1836,37 @@ function App() {
       </nav>
     </main>
   )
+}
+
+async function compressExpensePhoto(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('請選擇相片檔案。')
+  }
+
+  const imageUrl = URL.createObjectURL(file)
+  const image = new Image()
+  image.src = imageUrl
+
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve()
+    image.onerror = () => reject(new Error('相片讀取失敗。'))
+  })
+
+  const maxSide = 1200
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(image.width * scale))
+  canvas.height = Math.max(1, Math.round(image.height * scale))
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    URL.revokeObjectURL(imageUrl)
+    throw new Error('相片處理失敗。')
+  }
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height)
+  URL.revokeObjectURL(imageUrl)
+  return canvas.toDataURL('image/jpeg', 0.76)
 }
 
 function CategoryIcon({ category }: { category: Pick<Category, 'id' | 'icon' | 'name' | 'color'> }) {
@@ -1660,7 +1935,7 @@ function CalculatorPadV2({
   expression: string
   onPress: (key: string) => void | Promise<void>
 }) {
-  const keys = ['7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '*', '0', '.', 'backspace', '/', 'C', '=', 'OK']
+  const keys = ['1', '2', '3', '/', '4', '5', '6', '*', '7', '8', '9', '-', '.', '0', 'backspace', '+', 'OK']
 
   return (
     <div className="calculator-pad" aria-label="金額計算機">
@@ -1673,7 +1948,7 @@ function CalculatorPadV2({
             className={key === 'OK' ? 'is-done' : isCalculatorOperatorV2(key) ? 'is-operator' : ''}
             onClick={() => void onPress(key)}
           >
-            {key === '*' ? '×' : key === '/' ? '÷' : key === 'backspace' ? '⌫' : key}
+            {key === '*' ? '×' : key === '/' ? '÷' : key === 'backspace' ? '⌫' : key === 'OK' ? '下一步' : key}
           </button>
         ))}
       </div>
