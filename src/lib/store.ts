@@ -492,7 +492,11 @@ export async function updateCloudExpense(expense: Expense) {
 
   if (expenseError) throw expenseError
 
-  const { error: splitError } = await client.from('expense_splits').upsert([
+  const { error: clearSplitError } = await client.from('expense_splits').delete().eq('expense_id', expense.id)
+
+  if (clearSplitError) throw clearSplitError
+
+  const { error: splitError } = await client.from('expense_splits').insert([
     {
       expense_id: expense.id,
       member_key: 'personA',

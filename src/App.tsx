@@ -582,7 +582,8 @@ function App() {
 
   async function saveExpense(expense: Expense) {
     if (cloudMode) {
-      if (editingExpenseId) await updateCloudExpense(expense)
+      const existsInCloudData = appData.expenses.some((item) => item.id === expense.id)
+      if (existsInCloudData) await updateCloudExpense(expense)
       else await insertCloudExpense(expense)
       await refreshCloudData()
     } else {
@@ -870,7 +871,6 @@ function App() {
   }
 
   function openStoryCamera() {
-    setIsStoryCameraOpen(true)
     setStatusMessage('')
     swipeCameraInputRef.current?.click()
   }
@@ -896,8 +896,8 @@ function App() {
 
     try {
       const photoDataUrl = await compressExpensePhoto(file)
-      setStoryPhotoDataUrl(photoDataUrl)
       setIsStoryCameraOpen(true)
+      setStoryPhotoDataUrl(photoDataUrl)
       setStatusMessage('相片已準備好，可以加入支出資料。')
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : '相片加入失敗。')
@@ -924,7 +924,8 @@ function App() {
     const deltaX = touch.clientX - start.x
     const deltaY = Math.abs(touch.clientY - start.y)
     if (deltaX > 86 && deltaY < 70) {
-      openStoryCamera()
+      setStatusMessage('')
+      swipeCameraInputRef.current?.click()
     }
   }
 
@@ -1207,9 +1208,6 @@ function App() {
   return (
     <main className={`phone-shell theme-${theme}`} onTouchStart={handleShellTouchStart} onTouchEnd={handleShellTouchEnd}>
       <input ref={swipeCameraInputRef} className="sr-only-camera-input" type="file" accept="image/*" capture="environment" onChange={handleStoryPhotoChange} />
-      <button type="button" className="edge-camera-trigger" onClick={openStoryCamera} aria-label="由左邊滑出拍照模式">
-        <Camera size={18} />
-      </button>
       <header className="app-header">
         <div>
           <p className="muted-label">Hi, {currentProfile.name}</p>
@@ -1775,28 +1773,34 @@ function App() {
       {isStoryCameraOpen && (
         <div className="story-camera-backdrop" role="dialog" aria-modal="true" aria-label="拍照加入支出" onClick={closeStoryCamera}>
           <form className="story-camera-sheet" onSubmit={handleStorySubmit} onClick={(event) => event.stopPropagation()}>
-            <div className="story-sheet-handle" />
-            <div className="story-sheet-title">
-              <span><Camera size={18} />拍照支出</span>
-              <button type="button" className="ghost-icon" onClick={closeStoryCamera} aria-label="關閉拍照模式"><X size={18} /></button>
-            </div>
             {storyPhotoDataUrl ? (
-              <article className="story-photo-frame">
+              <article className="story-photo-frame has-photo">
                 <img src={storyPhotoDataUrl} alt="準備發送的支出照片" />
-                <button type="button" className="photo-remove-button" onClick={() => setStoryPhotoDataUrl('')} aria-label="重新拍照">
-                  <Camera size={16} />
-                </button>
+                <div className="story-top-bar">
+                  <button type="button" onClick={closeStoryCamera} aria-label="關閉拍照模式"><X size={20} /></button>
+                  <span>拍照支出</span>
+                  <button type="button" onClick={openStoryCamera} aria-label="重新拍照"><Camera size={19} /></button>
+                </div>
               </article>
             ) : (
               <button type="button" className="story-camera-empty" onClick={openStoryCamera}>
                 <Camera size={30} />
-                <strong>從左邊滑入，或按這裡拍照</strong>
-                <span>拍完後可以像限時動態一樣加留言和支出資料。</span>
+                <strong>從左邊滑入進入相機</strong>
+                <span>拍完後會直接套用到這個限時動態支出畫面。</span>
               </button>
             )}
-            <div className="story-fields">
-              <input value={storyCaption} onChange={(event) => setStoryCaption(event.target.value)} placeholder="加一句留言，例如：今晚我先付" />
-              <input value={storyTitle} onChange={(event) => setStoryTitle(event.target.value)} placeholder="項目名稱，可留空用分類名稱" />
+            <div className="story-bottom-composer">
+              <div className="story-meta-row">
+                <input value={storyTitle} onChange={(event) => setStoryTitle(event.target.value)} placeholder={categoryName(storyCategoryId)} aria-label="項目名稱" />
+                <button type="button" className={`story-chip ${storyIsShared ? 'selected' : ''}`} onClick={() => setStoryIsShared((current) => !current)}>
+                  <Copy size={14} />
+                  {storyIsShared ? '共同' : '個人'}
+                </button>
+                <button type="button" className={`story-chip ${storyNotifyOther ? 'selected' : ''}`} onClick={() => setStoryNotifyOther((current) => !current)}>
+                  <Mail size={14} />
+                  通知
+                </button>
+              </div>
               <div className="quick-input-row story-amount-row">
                 <span>HK$</span>
                 <input readOnly inputMode="none" value={storyAmount} onFocus={() => openCalculator('story', storyAmount)} onClick={() => openCalculator('story', storyAmount)} placeholder="金額" />
@@ -1810,19 +1814,13 @@ function App() {
                   </button>
                 ))}
               </div>
-              <button type="button" className={`shared-book-toggle ${storyIsShared ? 'selected' : ''}`} onClick={() => setStoryIsShared((current) => !current)}>
-                <Copy size={16} />
-                {storyIsShared ? '已加入共同帳簿' : '加入共同帳簿'}
-              </button>
-              <label className="toggle-line notify-toggle story-notify-toggle">
-                <input type="checkbox" checked={storyNotifyOther} onChange={(event) => setStoryNotifyOther(event.target.checked)} />
-                <span><Mail size={16} />通知另一位用戶</span>
-              </label>
+              <div className="story-message-row">
+                <input value={storyCaption} onChange={(event) => setStoryCaption(event.target.value)} placeholder="傳送訊息" />
+                <button className="story-send-button" type="submit" disabled={isStorySaving} aria-label="發送給對方">
+                  <Send size={19} />
+                </button>
+              </div>
             </div>
-            <button className="story-send-button" type="submit" disabled={isStorySaving}>
-              <Send size={18} />
-              {isStorySaving ? '發送中...' : '發送給對方'}
-            </button>
           </form>
         </div>
       )}
