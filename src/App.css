@@ -500,6 +500,40 @@ button:active {
   grid-column: 1 / -1;
 }
 
+.repeat-panel-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.repeat-panel-title > span,
+.repeat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.repeat-toggle {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(39, 49, 61, 0.72);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.repeat-toggle svg {
+  transition: transform 180ms ease;
+}
+
+.repeat-toggle svg.is-open {
+  transform: rotate(180deg);
+}
+
 .repeat-list {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -508,9 +542,10 @@ button:active {
 
 .repeat-list button {
   display: grid;
-  gap: 4px;
-  min-height: 58px;
-  padding: 10px;
+  gap: 3px;
+  align-content: start;
+  min-height: 0;
+  padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(39, 49, 61, 0.62);
@@ -656,6 +691,19 @@ button:active {
   color: var(--deep);
 }
 
+.calculator-grid button.is-done::before {
+  content: "=";
+}
+
+.calculator-grid button.is-done {
+  font-size: 0;
+}
+
+.calculator-grid button.is-done::before {
+  font-size: 20px;
+  font-weight: 950;
+}
+
 .quick-input-row button {
   display: grid;
   place-items: center;
@@ -718,6 +766,7 @@ button:active {
 .transfer-line {
   position: relative;
   z-index: 1;
+  display: flex;
   flex-wrap: wrap;
   gap: 9px;
   color: color-mix(in srgb, var(--hero-text) 68%, transparent);
@@ -732,6 +781,39 @@ button:active {
 
 .transfer-line.balanced {
   color: var(--hero-text);
+}
+
+.settlement-summary {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+}
+
+.settlement-summary div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--hero-text) 14%, transparent);
+}
+
+.settlement-summary div:last-child {
+  border-bottom: 0;
+}
+
+.settlement-summary span {
+  color: color-mix(in srgb, var(--hero-text) 68%, transparent);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.settlement-summary b {
+  color: var(--hero-text);
+  font-size: 16px;
+  font-weight: 950;
+  white-space: nowrap;
 }
 
 .person-summary {
@@ -833,6 +915,85 @@ button:active {
 .ratio-details strong {
   color: var(--ink);
   font-size: 17px;
+}
+
+.category-chart-layout {
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.category-donut {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 138px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 16px 28px rgba(0, 0, 0, 0.18);
+}
+
+.category-donut::after {
+  display: none;
+}
+
+.category-chart-list {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.category-chart-total,
+.category-chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-chart-total {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.category-chart-total span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.category-chart-total strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.category-chart-row {
+  min-width: 0;
+}
+
+.category-chart-row span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.category-chart-row span i {
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.category-chart-row b {
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .ratio-setting-summary {
@@ -2702,7 +2863,7 @@ button:active,
 
 .expense-photo-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -2711,7 +2872,7 @@ button:active,
 
 .optional-toggle {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -2730,12 +2891,6 @@ button:active,
   gap: 7px;
 }
 
-.optional-toggle small {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .optional-toggle svg:last-child {
   transition: transform 180ms ease;
 }
@@ -2746,45 +2901,94 @@ button:active,
 
 .expense-photo-body {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
-.expense-photo-panel .field-heading span,
-.notify-toggle span {
-  display: inline-flex;
+.photo-tool-row {
+  display: grid;
+  grid-template-columns: 42px 42px minmax(0, 1fr) 42px;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  min-height: 48px;
 }
 
-.photo-capture-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 12px;
+.photo-icon-button,
+.notify-icon-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
   border: 1px solid var(--line);
-  border-radius: 9999px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   color: var(--ink);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 800;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
-.photo-capture-button input {
+.photo-icon-button input {
   display: none;
 }
 
-.photo-empty-state {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 74px;
-  padding: 14px;
-  border: 1px dashed var(--line);
-  border-radius: 18px;
+.photo-caption-inline {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 12px !important;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--muted);
+  font-weight: 800;
+}
+
+.photo-caption-inline:focus {
+  color: var(--ink);
+  outline: 0;
+  border-color: rgba(183, 255, 22, 0.42);
+}
+
+.notify-icon-button.selected {
+  border-color: transparent;
+  background: var(--lime);
+  color: var(--deep);
+  box-shadow: 0 10px 24px rgba(183, 255, 22, 0.2);
+}
+
+.notify-icon-button:active {
+  transform: scale(0.94);
+}
+
+.title-date-input > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-date-input > div > input:first-child {
+  min-width: 0;
+}
+
+.title-date-input button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hidden-date-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .photo-preview-card {
@@ -2822,6 +3026,7 @@ button:active,
 .form-action-stack {
   display: grid;
   gap: 12px;
+  margin-top: 14px;
 }
 
 .form-action-stack .secondary-action {

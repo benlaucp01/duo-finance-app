@@ -263,6 +263,7 @@ function App() {
   const [fixedCategoryId, setFixedCategoryId] = useState('rent')
   const [isFixedExpenseOpen, setIsFixedExpenseOpen] = useState(false)
   const [repeatDraft, setRepeatDraft] = useState<{ expense: Expense; amount: string } | null>(null)
+  const [isRecentExpanded, setIsRecentExpanded] = useState(false)
   const [recordFilter, setRecordFilter] = useState<RecordFilter>('all')
   const [recordAccountFilter, setRecordAccountFilter] = useState<RecordAccountFilter>('all')
   const [isRecordManaging, setIsRecordManaging] = useState(false)
@@ -287,6 +288,7 @@ function App() {
   const galleryInputRef = useRef<HTMLInputElement | null>(null)
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null)
   const cameraStreamRef = useRef<MediaStream | null>(null)
+  const expenseDateInputRef = useRef<HTMLInputElement | null>(null)
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
   const cameraSwipeStart = useRef<{ x: number; y: number } | null>(null)
 
@@ -578,7 +580,18 @@ function App() {
       return groups
     }, {}),
   ).sort((a, b) => b.amount - a.amount)
+  const myCategoryTotalAmount = roundMoney(myCategoryTotals.reduce((total, item) => total + item.amount, 0))
+  const categoryChartBackground = myCategoryTotals.length
+    ? `conic-gradient(${myCategoryTotals.reduce<{ stops: string[]; start: number }>((chart, item) => {
+      const percent = myCategoryTotalAmount > 0 ? (item.amount / myCategoryTotalAmount) * 100 : 0
+      const end = chart.start + percent
+      chart.stops.push(`${categoryMeta(item.categoryId)?.color ?? '#94a3b8'} ${chart.start}% ${end}%`)
+      chart.start = end
+      return chart
+    }, { stops: [], start: 0 }).stops.join(', ')})`
+    : 'conic-gradient(rgba(255,255,255,0.12) 0 100%)'
   const recentTemplates = [...appData.expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6)
+  const visibleRecentTemplates = isRecentExpanded ? recentTemplates : recentTemplates.slice(0, 4)
   const recordExpenses = monthExpenses.filter((expense) => {
     const matchesPerson = recordFilter === 'all' || expense.payerId === recordFilter
     const matchesAccount =
@@ -1132,13 +1145,8 @@ function App() {
       if (result !== null) {
         const value = formatCalculatorValue(result)
         setCalculatorAmount(calculator.target, value)
-        if (calculator.target === 'quick') {
-          setCalculator(null)
-          await submitQuickAdd(value)
-          return
-        }
+        setCalculator({ ...calculator, expression: value })
       }
-      setCalculator(null)
       return
     }
 
@@ -1174,7 +1182,7 @@ function App() {
 
     const value = `${calculator.expression}${key}`
     setCalculator({ ...calculator, expression: value })
-    if (isPlainNumber(value)) setCalculatorAmount(calculator.target, value)
+    setCalculatorAmount(calculator.target, value)
   }
 
   function startEditExpense(expense: Expense) {
@@ -1463,7 +1471,7 @@ function App() {
               <div className="quick-input-row">
                 <span>HK$</span>
                 <input readOnly inputMode="none" value={quickAmount} onFocus={() => openCalculator('quick', quickAmount)} onClick={() => openCalculator('quick', quickAmount)} placeholder="金額" aria-label="快速輸入金額" />
-                <button type="submit" disabled={isQuickSaving}><Plus size={18} /></button>
+                <button type="submit" disabled={isQuickSaving} aria-label="儲存快速支出"><Check size={18} /></button>
               </div>
               {calculator?.target === 'quick' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
             </div>
@@ -1536,9 +1544,22 @@ function App() {
 
           {recentTemplates.length > 0 && (
             <section className="panel quick-repeat-panel">
-              <div className="panel-title"><Coins size={18} /><h2>最近支出</h2></div>
+              <div className="panel-title repeat-panel-title">
+                <span><Coins size={18} /><h2>最近支出</h2></span>
+                {recentTemplates.length > 4 && (
+                  <button
+                    className="repeat-toggle"
+                    type="button"
+                    onClick={() => setIsRecentExpanded((current) => !current)}
+                    aria-expanded={isRecentExpanded}
+                  >
+                    {isRecentExpanded ? '收起' : '更多'}
+                    <ChevronDown size={16} className={isRecentExpanded ? 'is-open' : ''} />
+                  </button>
+                )}
+              </div>
               <div className="repeat-list">
-                {recentTemplates.map((expense) => (
+                {visibleRecentTemplates.map((expense) => (
                   <button key={expense.id} type="button" onClick={() => setRepeatDraft({ expense, amount: String(expense.originalAmount) })}>
                     <span>{expense.title}</span>
                     <b>{formatMoney(expense.originalAmount, expense.originalCurrency)}</b>
@@ -1573,25 +1594,31 @@ function App() {
 
           <section className="panel">
             <div className="panel-title"><Coins size={18} /><h2>你的分類支出</h2></div>
-            {myExpenses.length === 0 ? <p className="empty-text">你這個月份還未有支出。</p> : myCategoryTotals.map((item) => (
-              <div key={item.categoryId} className="stat-row">
-                <span><i style={{ background: categoryMeta(item.categoryId)?.color ?? '#94a3b8' }} />{categoryName(item.categoryId)}</span>
-                <b>{formatMoney(item.amount)}</b>
+            {myExpenses.length === 0 ? <p className="empty-text">你這個月份還未有支出。</p> : (
+              <div className="category-chart-layout">
+                <div className="category-donut" style={{ background: categoryChartBackground }} aria-label="分類支出圖表" />
+                <div className="category-chart-list">
+                  <div className="category-chart-total"><span>總額</span><strong>{formatMoney(myCategoryTotalAmount)}</strong></div>
+                  {myCategoryTotals.map((item) => (
+                    <div key={item.categoryId} className="category-chart-row">
+                      <span><i style={{ background: categoryMeta(item.categoryId)?.color ?? '#94a3b8' }} />{categoryName(item.categoryId)}</span>
+                      <b>{formatMoney(item.amount)}</b>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </section>
-
-          <section className="panel">
-            <div className="panel-title"><CircleDollarSign size={18} /><h2>全月共同帳簿</h2></div>
-            <div className="stat-row"><span>共同帳簿總支出</span><b>{formatMoney(settlement.totalHkd)}</b></div>
-            <div className="stat-row"><span>月結方向</span><b>{personalSettlementText()}</b></div>
+            )}
           </section>
 
           <article className="hero-card">
             <p>今個月結算</p>
             <strong>{personalSettlementText()}</strong>
             <div className="hero-divider" />
-            <div className="transfer-line"><span>你的月結後個人支出</span><b>{formatMoney(myPaid)}</b><span>共同帳簿應負擔 {formatMoney(myOwed)}</span></div>
+            <div className="settlement-summary">
+              <div><span>你的月結後個人支出</span><b>{formatMoney(myPaid)}</b></div>
+              <div><span>共同帳簿總支出</span><b>{formatMoney(settlement.totalHkd)}</b></div>
+              <div><span>你在共同帳簿應負擔</span><b>{formatMoney(myOwed)}</b></div>
+            </div>
           </article>
         </section>
       )}
@@ -1626,15 +1653,6 @@ function App() {
               <Copy size={17} />
               {form.isShared ? '已加入共同帳簿' : '加入共同帳簿'}
             </button>
-            <label className="hero-input">項目<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" /></label>
-            <div className="amount-currency-row">
-              <label>金額<input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" /></label>
-              <label>貨幣<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })}>{currencies.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
-            </div>
-            {calculator?.target === 'expense' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
-            <label>日期<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
-            {form.currency !== 'HKD' && <label className="toggle-line"><input type="checkbox" checked={form.useManualRate} onChange={(event) => setForm({ ...form, useManualRate: event.target.checked })} />使用手動匯率</label>}
-            {form.currency !== 'HKD' && form.useManualRate && <label>1 {form.currency} 等於多少 HKD<input type="number" min="0" step="0.0001" value={form.manualRate} onChange={(event) => setForm({ ...form, manualRate: event.target.value })} placeholder="例如：0.052" /></label>}
             <div className="expense-category-block">
               <div className="field-heading">
                 <span>分類</span>
@@ -1668,6 +1686,23 @@ function App() {
                 </div>
               </div>
             )}
+            <label className="hero-input title-date-input">
+              項目
+              <div>
+                <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" />
+                <button type="button" onClick={() => expenseDateInputRef.current?.showPicker?.() ?? expenseDateInputRef.current?.click()} aria-label="選擇日期" title={form.date === todayInputValue() ? '今日' : form.date}>
+                  <CalendarDays size={18} />
+                </button>
+                <input ref={expenseDateInputRef} className="hidden-date-input" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} aria-label="支出日期" />
+              </div>
+            </label>
+            <div className="amount-currency-row">
+              <label>金額<input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" /></label>
+              <label>貨幣<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })}>{currencies.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
+            </div>
+            {calculator?.target === 'expense' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
+            {form.currency !== 'HKD' && <label className="toggle-line"><input type="checkbox" checked={form.useManualRate} onChange={(event) => setForm({ ...form, useManualRate: event.target.checked })} />使用手動匯率</label>}
+            {form.currency !== 'HKD' && form.useManualRate && <label>1 {form.currency} 等於多少 HKD<input type="number" min="0" step="0.0001" value={form.manualRate} onChange={(event) => setForm({ ...form, manualRate: event.target.value })} placeholder="例如：0.052" /></label>}
             <label>備註<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如：信用卡實際匯率、旅行地點等" /></label>
             <section className={`expense-photo-panel ${isExpensePhotoOpen ? 'is-open' : ''}`}>
               <button
@@ -1677,18 +1712,29 @@ function App() {
                 aria-expanded={isExpensePhotoOpen}
               >
                 <span><Camera size={17} />支出照片及留言</span>
-                <small>Optional</small>
                 <ChevronDown size={18} />
               </button>
               {isExpensePhotoOpen && (
                 <div className="expense-photo-body">
-                  <div className="field-heading">
-                    <span>為這筆支出加入相片</span>
-                    <label className="photo-capture-button">
-                      <ImageIcon size={16} />
-                      拍照 / 選相
+                  <div className="photo-tool-row">
+                    <label className="photo-icon-button" aria-label="拍照">
+                      <Camera size={17} />
                       <input type="file" accept="image/*" capture="environment" onChange={handleExpensePhotoChange} />
                     </label>
+                    <label className="photo-icon-button" aria-label="選擇相片">
+                      <ImageIcon size={16} />
+                      <input type="file" accept="image/*" onChange={handleExpensePhotoChange} />
+                    </label>
+                    <input className="photo-caption-inline" value={form.photoCaption} onChange={(event) => setForm({ ...form, photoCaption: event.target.value })} placeholder="相片留言" aria-label="相片留言" />
+                    <button
+                      type="button"
+                      className={`notify-icon-button ${form.notifyOther ? 'selected' : ''}`}
+                      onClick={() => setForm({ ...form, notifyOther: !form.notifyOther })}
+                      aria-label={form.notifyOther ? '已選擇通知另一位用戶' : '通知另一位用戶'}
+                      title="通知另一位用戶"
+                    >
+                      <Send size={17} />
+                    </button>
                   </div>
                   {form.photoDataUrl ? (
                     <article className="photo-preview-card">
@@ -1697,14 +1743,7 @@ function App() {
                         <X size={16} />
                       </button>
                     </article>
-                  ) : (
-                    <div className="photo-empty-state">
-                      <Camera size={22} />
-                      <span>可以像限時動態一樣，為這筆支出加一張相和一句留言。</span>
-                    </div>
-                  )}
-                  <label>相片留言<input value={form.photoCaption} onChange={(event) => setForm({ ...form, photoCaption: event.target.value })} placeholder="例如：今晚食得好滿足、記得下次你請" /></label>
-                  <label className="toggle-line notify-toggle"><input type="checkbox" checked={form.notifyOther} onChange={(event) => setForm({ ...form, notifyOther: event.target.checked })} /><span><Mail size={16} />通知另一位用戶</span></label>
+                  ) : null}
                 </div>
               )}
             </section>
@@ -2119,11 +2158,11 @@ function CategoryIcon({ category }: { category: Pick<Category, 'id' | 'icon' | '
 }
 
 function CalculatorPad({ expression, onPress }: { expression: string; onPress: (key: string) => void }) {
+  void expression
   const keys = ['7', '8', '9', '+', '4', '5', '6', '-', '1', '2', '3', '*', '0', '.', '⌫', '/', 'C', '=', 'OK']
 
   return (
     <div className="calculator-pad" aria-label="金額計算機">
-      <div className="calculator-display">{expression || '0'}</div>
       <div className="calculator-grid">
         {keys.map((key) => (
           <button key={key} type="button" className={key === 'OK' ? 'is-done' : isCalculatorOperator(key) ? 'is-operator' : ''} onClick={() => onPress(key)}>
@@ -2142,7 +2181,6 @@ function isCalculatorOperator(key: string) {
 void CalculatorPad
 
 function CalculatorPadV2({
-  expression,
   onPress,
 }: {
   expression: string
@@ -2152,7 +2190,6 @@ function CalculatorPadV2({
 
   return (
     <div className="calculator-pad" aria-label="金額計算機">
-      <div className="calculator-display">{expression || '0'}</div>
       <div className="calculator-grid">
         {keys.map((key) => (
           <button
@@ -2161,7 +2198,7 @@ function CalculatorPadV2({
             className={key === 'OK' ? 'is-done' : isCalculatorOperatorV2(key) ? 'is-operator' : ''}
             onClick={() => void onPress(key)}
           >
-            {key === '*' ? '×' : key === '/' ? '÷' : key === 'backspace' ? '⌫' : key === 'OK' ? '下一步' : key}
+            {key === '*' ? '×' : key === '/' ? '÷' : key === 'backspace' ? '⌫' : key === 'OK' ? '=' : key}
           </button>
         ))}
       </div>
@@ -2171,10 +2208,6 @@ function CalculatorPadV2({
 
 function isCalculatorOperatorV2(key: string) {
   return ['+', '-', '*', '/', '=', 'C', 'backspace'].includes(key)
-}
-
-function isPlainNumber(value: string) {
-  return /^\d*\.?\d*$/.test(value)
 }
 
 function formatCalculatorValue(value: number) {
