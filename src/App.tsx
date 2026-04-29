@@ -253,6 +253,8 @@ function App() {
   const [storyIsShared, setStoryIsShared] = useState(false)
   const [storyNotifyOther, setStoryNotifyOther] = useState(true)
   const [isStorySaving, setIsStorySaving] = useState(false)
+  const [isCameraModeOpen, setIsCameraModeOpen] = useState(false)
+  const [cameraDrag, setCameraDrag] = useState({ visible: false, x: 0, settling: false })
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseTemplate[]>(() => loadFixedExpenses())
   const [fixedTitle, setFixedTitle] = useState('')
   const [fixedAmount, setFixedAmount] = useState('')
@@ -280,6 +282,7 @@ function App() {
   const fixedAutoRunKey = useRef('')
   const longPressTimer = useRef<number | null>(null)
   const swipeCameraInputRef = useRef<HTMLInputElement | null>(null)
+  const galleryInputRef = useRef<HTMLInputElement | null>(null)
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
@@ -872,11 +875,24 @@ function App() {
 
   function openStoryCamera() {
     setStatusMessage('')
+    if (swipeCameraInputRef.current) swipeCameraInputRef.current.value = ''
     swipeCameraInputRef.current?.click()
+  }
+
+  function openStoryGallery() {
+    setStatusMessage('')
+    if (galleryInputRef.current) galleryInputRef.current.value = ''
+    galleryInputRef.current?.click()
+  }
+
+  function closeCameraMode() {
+    setIsCameraModeOpen(false)
+    setCameraDrag({ visible: false, x: 0, settling: false })
   }
 
   function closeStoryCamera() {
     setIsStoryCameraOpen(false)
+    setIsCameraModeOpen(false)
     setCalculator((current) => (current?.target === 'story' ? null : current))
   }
 
@@ -896,8 +912,10 @@ function App() {
 
     try {
       const photoDataUrl = await compressExpensePhoto(file)
-      setIsStoryCameraOpen(true)
       setStoryPhotoDataUrl(photoDataUrl)
+      setCameraDrag({ visible: false, x: 0, settling: false })
+      setIsCameraModeOpen(false)
+      setIsStoryCameraOpen(true)
       setStatusMessage('相片已準備好，可以加入支出資料。')
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : '相片加入失敗。')
@@ -908,11 +926,31 @@ function App() {
 
   function handleShellTouchStart(event: TouchEvent<HTMLElement>) {
     const touch = event.touches[0]
-    if (!touch || touch.clientX > 28 || isStoryCameraOpen) {
+    if (!touch || touch.clientX > 28 || isStoryCameraOpen || isCameraModeOpen) {
       swipeStart.current = null
       return
     }
     swipeStart.current = { x: touch.clientX, y: touch.clientY }
+    setCameraDrag({ visible: true, x: 0, settling: false })
+  }
+
+  function handleShellTouchMove(event: TouchEvent<HTMLElement>) {
+    const start = swipeStart.current
+    const touch = event.touches[0]
+    if (!start || !touch) return
+
+    const deltaX = Math.max(0, touch.clientX - start.x)
+    const deltaY = Math.abs(touch.clientY - start.y)
+    if (deltaY > 72 && deltaY > deltaX) {
+      swipeStart.current = null
+      setCameraDrag({ visible: false, x: 0, settling: false })
+      return
+    }
+
+    if (deltaX > 8) {
+      const width = window.innerWidth || 390
+      setCameraDrag({ visible: true, x: Math.min(deltaX, width), settling: false })
+    }
   }
 
   function handleShellTouchEnd(event: TouchEvent<HTMLElement>) {
@@ -923,10 +961,21 @@ function App() {
 
     const deltaX = touch.clientX - start.x
     const deltaY = Math.abs(touch.clientY - start.y)
-    if (deltaX > 86 && deltaY < 70) {
+    const width = window.innerWidth || 390
+    if (deltaX > width * 0.5 && deltaY < 90) {
+      setCameraDrag({ visible: true, x: width, settling: true })
       setStatusMessage('')
-      swipeCameraInputRef.current?.click()
+      window.setTimeout(() => {
+        setCameraDrag({ visible: false, x: 0, settling: false })
+        setIsCameraModeOpen(true)
+      }, 220)
+      return
     }
+
+    setCameraDrag({ visible: true, x: 0, settling: true })
+    window.setTimeout(() => {
+      setCameraDrag({ visible: false, x: 0, settling: false })
+    }, 220)
   }
 
   async function handleStorySubmit(event: FormEvent) {
@@ -1206,8 +1255,44 @@ function App() {
   }
 
   return (
-    <main className={`phone-shell theme-${theme}`} onTouchStart={handleShellTouchStart} onTouchEnd={handleShellTouchEnd}>
+    <main className={`phone-shell theme-${theme}`} onTouchStart={handleShellTouchStart} onTouchMove={handleShellTouchMove} onTouchEnd={handleShellTouchEnd} onTouchCancel={handleShellTouchEnd}>
       <input ref={swipeCameraInputRef} className="sr-only-camera-input" type="file" accept="image/*" capture="environment" onChange={handleStoryPhotoChange} />
+      <input ref={galleryInputRef} className="sr-only-camera-input" type="file" accept="image/*" onChange={handleStoryPhotoChange} />
+      {cameraDrag.visible && (
+        <div
+          className={`camera-drag-preview ${cameraDrag.settling ? 'is-settling' : ''}`}
+          style={{ transform: `translateX(calc(-100% + ${Math.max(0, cameraDrag.x)}px))` }}
+          aria-hidden="true"
+        >
+          <div className="camera-drag-lens">
+            <Camera size={34} />
+          </div>
+          <strong>相機</strong>
+          <span>{cameraDrag.x > ((typeof window !== 'undefined' ? window.innerWidth : 390) * 0.5) ? '放手開啟相機' : '向右拉過一半'}</span>
+        </div>
+      )}
+      {isCameraModeOpen && (
+        <div className="camera-mode-backdrop" role="dialog" aria-modal="true" aria-label="相機模式">
+          <div className="camera-mode-top">
+            <button type="button" onClick={closeCameraMode} aria-label="關閉相機"><X size={22} /></button>
+            <span>相機</span>
+            <button type="button" onClick={openStoryCamera} aria-label="重新開啟相機"><Camera size={21} /></button>
+          </div>
+          <div className="camera-viewfinder">
+            <div className="camera-focus-ring" />
+            <span>拍低這筆支出</span>
+          </div>
+          <div className="camera-mode-actions">
+            <button type="button" className="gallery-button" onClick={openStoryGallery} aria-label="選擇相片">
+              <ImageIcon size={24} />
+            </button>
+            <button type="button" className="camera-shutter" onClick={openStoryCamera} aria-label="拍照">
+              <span />
+            </button>
+            <span className="camera-action-spacer" />
+          </div>
+        </div>
+      )}
       <header className="app-header">
         <div>
           <p className="muted-label">Hi, {currentProfile.name}</p>
