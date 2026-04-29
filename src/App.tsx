@@ -255,6 +255,8 @@ function App() {
   const [isStorySaving, setIsStorySaving] = useState(false)
   const [isCameraModeOpen, setIsCameraModeOpen] = useState(false)
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'ready' | 'error'>('idle')
+  const [cameraZoom, setCameraZoom] = useState(1)
+  const [cameraZoomLimits, setCameraZoomLimits] = useState({ min: 1, max: 3, step: 0.1, native: false })
   const [isExpensePhotoOpen, setIsExpensePhotoOpen] = useState(false)
   const [cameraDrag, setCameraDrag] = useState({ visible: false, x: 0, settling: false })
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseTemplate[]>(() => loadFixedExpenses())
@@ -336,6 +338,19 @@ function App() {
 
         cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
         cameraStreamRef.current = stream
+        const [track] = stream.getVideoTracks()
+        const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & { zoom?: { min?: number; max?: number; step?: number } } | undefined
+        const zoomCapability = capabilities?.zoom
+        const nextZoomLimits = zoomCapability
+          ? {
+              min: zoomCapability.min ?? 1,
+              max: Math.min(zoomCapability.max ?? 3, 6),
+              step: zoomCapability.step ?? 0.1,
+              native: true,
+            }
+          : { min: 1, max: 3, step: 0.1, native: false }
+        setCameraZoomLimits(nextZoomLimits)
+        setCameraZoom(1)
         if (cameraVideoRef.current) {
           cameraVideoRef.current.srcObject = stream
           await cameraVideoRef.current.play().catch(() => undefined)
@@ -955,8 +970,23 @@ function App() {
     cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
     cameraStreamRef.current = null
     setCameraStatus('idle')
+    setCameraZoom(1)
+    setCameraZoomLimits({ min: 1, max: 3, step: 0.1, native: false })
     setIsCameraModeOpen(false)
     setCameraDrag({ visible: false, x: 0, settling: false })
+  }
+
+  async function handleCameraZoomChange(value: number) {
+    const nextZoom = Number(value.toFixed(2))
+    setCameraZoom(nextZoom)
+    const [track] = cameraStreamRef.current?.getVideoTracks() ?? []
+    if (!track || !cameraZoomLimits.native) return
+
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: nextZoom } as MediaTrackConstraintSet] })
+    } catch {
+      setCameraZoomLimits((current) => ({ ...current, native: false }))
+    }
   }
 
   function captureCameraPhoto() {
@@ -1396,7 +1426,7 @@ function App() {
             <span />
           </div>
           <div className="camera-viewfinder">
-            <video ref={cameraVideoRef} autoPlay muted playsInline />
+            <video ref={cameraVideoRef} autoPlay muted playsInline style={{ transform: cameraZoomLimits.native ? undefined : `scale(${cameraZoom})` }} />
             {cameraStatus !== 'ready' && (
               <div className="camera-status-overlay">
                 <Camera size={30} />
@@ -1405,6 +1435,20 @@ function App() {
             )}
           </div>
           <div className="camera-mode-actions">
+            {cameraStatus === 'ready' && (
+              <div className="camera-zoom-control" aria-label="相機縮放">
+                <span>{cameraZoom.toFixed(1)}x</span>
+                <input
+                  type="range"
+                  min={cameraZoomLimits.min}
+                  max={cameraZoomLimits.max}
+                  step={cameraZoomLimits.step}
+                  value={cameraZoom}
+                  onChange={(event) => void handleCameraZoomChange(Number(event.target.value))}
+                  aria-label="調整相機縮放"
+                />
+              </div>
+            )}
             <button type="button" className="gallery-button" onClick={openStoryGallery} aria-label="選擇相片">
               <ImageIcon size={24} />
             </button>
