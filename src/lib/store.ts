@@ -170,6 +170,40 @@ function requireSupabase() {
   return supabase
 }
 
+function expensePhotoColumnMissing(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const message = 'message' in error ? String(error.message) : ''
+  return message.includes('photo_data_url') || message.includes('photo_caption') || message.includes('notify_other')
+}
+
+function toExpensePayload(expense: Expense, createdBy?: string, includePhotoFields = true) {
+  const payload: Record<string, unknown> = {
+    id: expense.id,
+    household_id: expense.householdId,
+    expense_date: expense.date,
+    title: expense.title,
+    original_amount: expense.originalAmount,
+    original_currency: expense.originalCurrency,
+    exchange_rate_to_hkd: expense.exchangeRateToHkd,
+    hkd_amount: expense.hkdAmount,
+    payer_key: expense.payerId,
+    is_shared: expense.isShared ?? true,
+    category_id: expense.categoryId,
+    split_mode: expense.splitMode,
+    note: expense.note,
+    rate_source: expense.rateSource,
+  }
+
+  if (createdBy) payload.created_by = createdBy
+  if (includePhotoFields) {
+    payload.photo_data_url = expense.photoDataUrl || null
+    payload.photo_caption = expense.photoCaption || null
+    payload.notify_other = expense.notifyOther ?? false
+  }
+
+  return payload
+}
+
 function toMoney(value: number | string | null | undefined) {
   return Number(value ?? 0)
 }
@@ -428,26 +462,12 @@ export async function insertCloudExpense(expense: Expense) {
     throw new Error('Please sign in first.')
   }
 
-  const { error: expenseError } = await client.from('expenses').insert({
-    id: expense.id,
-    household_id: expense.householdId,
-    expense_date: expense.date,
-    title: expense.title,
-    original_amount: expense.originalAmount,
-    original_currency: expense.originalCurrency,
-    exchange_rate_to_hkd: expense.exchangeRateToHkd,
-    hkd_amount: expense.hkdAmount,
-    payer_key: expense.payerId,
-    is_shared: expense.isShared ?? true,
-    category_id: expense.categoryId,
-    split_mode: expense.splitMode,
-    note: expense.note,
-    photo_data_url: expense.photoDataUrl || null,
-    photo_caption: expense.photoCaption || null,
-    notify_other: expense.notifyOther ?? false,
-    rate_source: expense.rateSource,
-    created_by: user.id,
-  })
+  let { error: expenseError } = await client.from('expenses').insert(toExpensePayload(expense, user.id))
+
+  if (expenseError && expensePhotoColumnMissing(expenseError)) {
+    const retry = await client.from('expenses').insert(toExpensePayload(expense, user.id, false))
+    expenseError = retry.error
+  }
 
   if (expenseError) throw expenseError
 
@@ -469,26 +489,15 @@ export async function insertCloudExpense(expense: Expense) {
 
 export async function updateCloudExpense(expense: Expense) {
   const client = requireSupabase()
-  const { error: expenseError } = await client
+  let { error: expenseError } = await client
     .from('expenses')
-    .update({
-      expense_date: expense.date,
-      title: expense.title,
-      original_amount: expense.originalAmount,
-      original_currency: expense.originalCurrency,
-      exchange_rate_to_hkd: expense.exchangeRateToHkd,
-      hkd_amount: expense.hkdAmount,
-      payer_key: expense.payerId,
-      is_shared: expense.isShared ?? true,
-      category_id: expense.categoryId,
-      split_mode: expense.splitMode,
-      note: expense.note,
-      photo_data_url: expense.photoDataUrl || null,
-      photo_caption: expense.photoCaption || null,
-      notify_other: expense.notifyOther ?? false,
-      rate_source: expense.rateSource,
-    })
+    .update(toExpensePayload(expense))
     .eq('id', expense.id)
+
+  if (expenseError && expensePhotoColumnMissing(expenseError)) {
+    const retry = await client.from('expenses').update(toExpensePayload(expense, undefined, false)).eq('id', expense.id)
+    expenseError = retry.error
+  }
 
   if (expenseError) throw expenseError
 

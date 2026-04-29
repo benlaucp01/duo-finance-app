@@ -254,6 +254,8 @@ function App() {
   const [storyNotifyOther, setStoryNotifyOther] = useState(true)
   const [isStorySaving, setIsStorySaving] = useState(false)
   const [isCameraModeOpen, setIsCameraModeOpen] = useState(false)
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'starting' | 'ready' | 'error'>('idle')
+  const [isExpensePhotoOpen, setIsExpensePhotoOpen] = useState(false)
   const [cameraDrag, setCameraDrag] = useState({ visible: false, x: 0, settling: false })
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseTemplate[]>(() => loadFixedExpenses())
   const [fixedTitle, setFixedTitle] = useState('')
@@ -283,7 +285,10 @@ function App() {
   const longPressTimer = useRef<number | null>(null)
   const swipeCameraInputRef = useRef<HTMLInputElement | null>(null)
   const galleryInputRef = useRef<HTMLInputElement | null>(null)
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
+  const cameraSwipeStart = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     localStorage.setItem(themeStorageKey, theme)
@@ -300,6 +305,53 @@ function App() {
   useEffect(() => {
     closeTemporaryPanels()
   }, [activeTab])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function startCameraPreview() {
+      if (!isCameraModeOpen) {
+        setCameraStatus('idle')
+        return
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraStatus('error')
+        return
+      }
+
+      setCameraStatus('starting')
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        })
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+        cameraStreamRef.current = stream
+        if (cameraVideoRef.current) {
+          cameraVideoRef.current.srcObject = stream
+          await cameraVideoRef.current.play().catch(() => undefined)
+        }
+        setCameraStatus('ready')
+      } catch {
+        if (!cancelled) setCameraStatus('error')
+      }
+    }
+
+    void startCameraPreview()
+
+    return () => {
+      cancelled = true
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+      cameraStreamRef.current = null
+    }
+  }, [isCameraModeOpen])
 
   useEffect(() => {
     let isMounted = true
@@ -515,9 +567,9 @@ function App() {
   }
   const myPaid = currentProfile ? personalMonthlyTotals[currentProfile.id] : 0
   const myOwed = currentProfile ? settlement.owed[currentProfile.id] : 0
-  const paidTotal = personalMonthlyTotals.personA + personalMonthlyTotals.personB
-  const personAPercentage = paidTotal > 0 ? Math.round((personalMonthlyTotals.personA / paidTotal) * 100) : 50
-  const personBPercentage = paidTotal > 0 ? 100 - personAPercentage : 50
+  const sharedPaidTotal = settlement.paid.personA + settlement.paid.personB
+  const personAPercentage = sharedPaidTotal > 0 ? Math.round((settlement.paid.personA / sharedPaidTotal) * 100) : 50
+  const personBPercentage = sharedPaidTotal > 0 ? 100 - personAPercentage : 50
   const myCategoryTotals = Object.values(
     myExpenses.reduce<Record<string, { categoryId: string; amount: number }>>((groups, expense) => {
       const current = groups[expense.categoryId] ?? { categoryId: expense.categoryId, amount: 0 }
@@ -674,6 +726,7 @@ function App() {
       await saveExpense(expense)
       rememberQuickCategory(expense.categoryId)
       setForm({ ...initialForm, date: form.date, categoryId: form.categoryId, payerId: form.payerId })
+      setIsExpensePhotoOpen(false)
       setEditingExpenseId(null)
       setStatusMessage(editingExpenseId ? '支出已更新。' : '支出已儲存。')
       switchTab('overview')
@@ -886,11 +939,59 @@ function App() {
   }
 
   function closeCameraMode() {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+    setCameraStatus('idle')
     setIsCameraModeOpen(false)
     setCameraDrag({ visible: false, x: 0, settling: false })
   }
 
+  function captureCameraPhoto() {
+    const video = cameraVideoRef.current
+    if (!video || cameraStatus !== 'ready' || !video.videoWidth || !video.videoHeight) {
+      setStatusMessage('相機未準備好，請再試一次。')
+      return
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const context = canvas.getContext('2d')
+    if (!context) {
+      setStatusMessage('未能擷取相片，請再試一次。')
+      return
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    setStoryPhotoDataUrl(canvas.toDataURL('image/jpeg', 0.82))
+    closeCameraMode()
+    setIsStoryCameraOpen(true)
+    setStatusMessage('')
+  }
+
+  function handleCameraModeTouchStart(event: TouchEvent<HTMLDivElement>) {
+    const touch = event.touches[0]
+    if (!touch) return
+    cameraSwipeStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  function handleCameraModeTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    const start = cameraSwipeStart.current
+    const touch = event.changedTouches[0]
+    cameraSwipeStart.current = null
+    if (!start || !touch) return
+
+    const deltaX = touch.clientX - start.x
+    const deltaY = Math.abs(touch.clientY - start.y)
+    if (deltaX < -72 && deltaY < 90) {
+      closeCameraMode()
+    }
+  }
+
   function closeStoryCamera() {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+    setCameraStatus('idle')
     setIsStoryCameraOpen(false)
     setIsCameraModeOpen(false)
     setCalculator((current) => (current?.target === 'story' ? null : current))
@@ -1095,6 +1196,7 @@ function App() {
       manualRate: String(expense.exchangeRateToHkd),
       useManualRate: expense.rateSource === 'manual',
     })
+    setIsExpensePhotoOpen(Boolean(expense.photoDataUrl || expense.photoCaption || expense.notifyOther))
     switchTab('add')
   }
 
@@ -1272,21 +1374,33 @@ function App() {
         </div>
       )}
       {isCameraModeOpen && (
-        <div className="camera-mode-backdrop" role="dialog" aria-modal="true" aria-label="相機模式">
+        <div
+          className="camera-mode-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="相機模式"
+          onTouchStart={handleCameraModeTouchStart}
+          onTouchEnd={handleCameraModeTouchEnd}
+        >
           <div className="camera-mode-top">
             <button type="button" onClick={closeCameraMode} aria-label="關閉相機"><X size={22} /></button>
-            <span>相機</span>
-            <button type="button" onClick={openStoryCamera} aria-label="重新開啟相機"><Camera size={21} /></button>
+            <span>{cameraStatus === 'ready' ? '相機已啟動' : cameraStatus === 'error' ? '未能開啟相機' : '啟動相機中'}</span>
+            <span />
           </div>
           <div className="camera-viewfinder">
-            <div className="camera-focus-ring" />
-            <span>拍低這筆支出</span>
+            <video ref={cameraVideoRef} autoPlay muted playsInline />
+            {cameraStatus !== 'ready' && (
+              <div className="camera-status-overlay">
+                <Camera size={30} />
+                <span>{cameraStatus === 'error' ? '請允許相機權限，或用左下角選相。' : '正在開啟鏡頭...'}</span>
+              </div>
+            )}
           </div>
           <div className="camera-mode-actions">
             <button type="button" className="gallery-button" onClick={openStoryGallery} aria-label="選擇相片">
               <ImageIcon size={24} />
             </button>
-            <button type="button" className="camera-shutter" onClick={openStoryCamera} aria-label="拍照">
+            <button type="button" className="camera-shutter" onClick={captureCameraPhoto} aria-label="拍照" disabled={cameraStatus !== 'ready'}>
               <span />
             </button>
             <span className="camera-action-spacer" />
@@ -1452,8 +1566,8 @@ function App() {
               <div className="ratio-b" style={{ width: `${personBPercentage}%` }}>{personBPercentage}%</div>
             </div>
             <div className="ratio-details">
-              <div><span>{personA.name} 月結後個人支出</span><strong>{formatMoney(personalMonthlyTotals.personA)}</strong></div>
-              <div><span>{personB.name} 月結後個人支出</span><strong>{formatMoney(personalMonthlyTotals.personB)}</strong></div>
+              <div><span>{personA.name} 共同帳簿已付</span><strong>{formatMoney(settlement.paid.personA)}</strong></div>
+              <div><span>{personB.name} 共同帳簿已付</span><strong>{formatMoney(settlement.paid.personB)}</strong></div>
             </div>
           </section>
 
@@ -1555,33 +1669,49 @@ function App() {
               </div>
             )}
             <label>備註<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如：信用卡實際匯率、旅行地點等" /></label>
-            <section className="expense-photo-panel">
-              <div className="field-heading">
-                <span><Camera size={17} />支出照片</span>
-                <label className="photo-capture-button">
-                  <ImageIcon size={16} />
-                  拍照 / 選相
-                  <input type="file" accept="image/*" capture="environment" onChange={handleExpensePhotoChange} />
-                </label>
-              </div>
-              {form.photoDataUrl ? (
-                <article className="photo-preview-card">
-                  <img src={form.photoDataUrl} alt="支出照片預覽" />
-                  <button type="button" className="photo-remove-button" onClick={() => setForm({ ...form, photoDataUrl: '', photoCaption: '', notifyOther: false })} aria-label="移除相片">
-                    <X size={16} />
-                  </button>
-                </article>
-              ) : (
-                <div className="photo-empty-state">
-                  <Camera size={22} />
-                  <span>可以像限時動態一樣，為這筆支出加一張相和一句留言。</span>
+            <section className={`expense-photo-panel ${isExpensePhotoOpen ? 'is-open' : ''}`}>
+              <button
+                type="button"
+                className="optional-toggle"
+                onClick={() => setIsExpensePhotoOpen((current) => !current)}
+                aria-expanded={isExpensePhotoOpen}
+              >
+                <span><Camera size={17} />支出照片及留言</span>
+                <small>Optional</small>
+                <ChevronDown size={18} />
+              </button>
+              {isExpensePhotoOpen && (
+                <div className="expense-photo-body">
+                  <div className="field-heading">
+                    <span>為這筆支出加入相片</span>
+                    <label className="photo-capture-button">
+                      <ImageIcon size={16} />
+                      拍照 / 選相
+                      <input type="file" accept="image/*" capture="environment" onChange={handleExpensePhotoChange} />
+                    </label>
+                  </div>
+                  {form.photoDataUrl ? (
+                    <article className="photo-preview-card">
+                      <img src={form.photoDataUrl} alt="支出照片預覽" />
+                      <button type="button" className="photo-remove-button" onClick={() => setForm({ ...form, photoDataUrl: '', photoCaption: '', notifyOther: false })} aria-label="移除相片">
+                        <X size={16} />
+                      </button>
+                    </article>
+                  ) : (
+                    <div className="photo-empty-state">
+                      <Camera size={22} />
+                      <span>可以像限時動態一樣，為這筆支出加一張相和一句留言。</span>
+                    </div>
+                  )}
+                  <label>相片留言<input value={form.photoCaption} onChange={(event) => setForm({ ...form, photoCaption: event.target.value })} placeholder="例如：今晚食得好滿足、記得下次你請" /></label>
+                  <label className="toggle-line notify-toggle"><input type="checkbox" checked={form.notifyOther} onChange={(event) => setForm({ ...form, notifyOther: event.target.checked })} /><span><Mail size={16} />通知另一位用戶</span></label>
                 </div>
               )}
-              <label>相片留言<input value={form.photoCaption} onChange={(event) => setForm({ ...form, photoCaption: event.target.value })} placeholder="例如：今晚食得好滿足、記得下次你請" /></label>
-              <label className="toggle-line notify-toggle"><input type="checkbox" checked={form.notifyOther} onChange={(event) => setForm({ ...form, notifyOther: event.target.checked })} /><span><Mail size={16} />通知另一位用戶</span></label>
             </section>
-            <button className="primary-action" type="submit" disabled={isSaving}><Check size={18} />{isSaving ? '儲存中...' : editingExpenseId ? '更新支出' : '儲存支出'}</button>
-            {editingExpenseId && <button className="secondary-action" type="button" onClick={() => { setEditingExpenseId(null); setForm(initialForm) }}>取消修改</button>}
+            <div className="form-action-stack">
+              <button className="primary-action" type="submit" disabled={isSaving}><Check size={18} />{isSaving ? '儲存中...' : editingExpenseId ? '更新支出' : '儲存支出'}</button>
+              {editingExpenseId && <button className="secondary-action" type="button" onClick={() => { setEditingExpenseId(null); setForm(initialForm); setIsExpensePhotoOpen(false) }}>取消修改</button>}
+            </div>
             {statusMessage && <p className="status-message">{statusMessage}</p>}
           </form>
         </section>
