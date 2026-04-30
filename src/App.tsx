@@ -271,6 +271,7 @@ function App() {
   const [isRecordManaging, setIsRecordManaging] = useState(false)
   const [isQuickSaving, setIsQuickSaving] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [photoViewer, setPhotoViewer] = useState<{ src: string; caption: string } | null>(null)
   const [statusMessage, setStatusMessage] = useState('')
   const [personAName, setPersonAName] = useState('')
   const [personBName, setPersonBName] = useState('')
@@ -605,6 +606,20 @@ function App() {
       return chart
     }, { stops: [], start: 0 }).stops.join(', ')})`
     : 'conic-gradient(rgba(255,255,255,0.12) 0 100%)'
+  const categoryChartLabels = myCategoryTotals.reduce<{ categoryId: string; percent: number; x: number; y: number }[]>((labels, item) => {
+    const percent = myCategoryTotalAmount > 0 ? (item.amount / myCategoryTotalAmount) * 100 : 0
+    const previous = labels.reduce((total, label) => total + label.percent, 0)
+    const angle = ((previous + percent / 2) / 100) * 360 - 90
+    const radians = (angle * Math.PI) / 180
+    const radius = percent < 9 ? 58 : 38
+    labels.push({
+      categoryId: item.categoryId,
+      percent: Math.round(percent),
+      x: 50 + Math.cos(radians) * radius,
+      y: 50 + Math.sin(radians) * radius,
+    })
+    return labels
+  }, [])
   const recentTemplates = [...appData.expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6)
   const visibleRecentTemplates = isRecentExpanded ? recentTemplates : recentTemplates.slice(0, 4)
   const recordExpenses = monthExpenses.filter((expense) => {
@@ -1480,7 +1495,7 @@ function App() {
 
       {activeTab === 'overview' && (
         <section className="screen-stack">
-          <form className="quick-entry panel" onSubmit={handleQuickAdd}>
+          {quickTitle.length < 0 && <form className="quick-entry panel" onSubmit={handleQuickAdd}>
             <div className="quick-entry-title"><Plus size={17} /><h2>快速加入支出</h2></div>
             <div className="quick-category-strip">
               <div className="quick-categories" aria-label="快速分類">
@@ -1519,7 +1534,7 @@ function App() {
               </div>
               {calculator?.target === 'quick' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
             </div>
-          </form>
+          </form>}
 
           {isCategoryFormOpen && (
             <div className="category-modal-backdrop" role="dialog" aria-modal="true" aria-label="新增快速分類" onClick={() => setIsCategoryFormOpen(false)}>
@@ -1586,7 +1601,7 @@ function App() {
             </div>
           )}
 
-          {recentTemplates.length > 0 && (
+          {recentTemplates.length < 0 && (
             <section className="panel quick-repeat-panel">
               <div className="panel-title repeat-panel-title">
                 <span><Coins size={18} /><h2>最近支出</h2></span>
@@ -1624,7 +1639,7 @@ function App() {
             </section>
           )}
 
-          <section className="contribution-card panel">
+          {recentTemplates.length < 0 && <section className="contribution-card panel">
             <div className="panel-title"><CircleDollarSign size={18} /><h2>雙方暫時支出比例</h2></div>
             <div className="ratio-bar" aria-label="雙方支出比例">
               <div className="ratio-a" style={{ width: `${personAPercentage}%` }}>{personAPercentage}%</div>
@@ -1634,13 +1649,23 @@ function App() {
               <div><span>{personA.name} 共同帳簿已付</span><strong>{formatMoney(settlement.paid.personA)}</strong></div>
               <div><span>{personB.name} 共同帳簿已付</span><strong>{formatMoney(settlement.paid.personB)}</strong></div>
             </div>
-          </section>
+          </section>}
 
-          <section className="panel">
+          <section className="panel category-spend-panel">
             <div className="panel-title"><Coins size={18} /><h2>你的分類支出</h2></div>
             {myExpenses.length === 0 ? <p className="empty-text">你這個月份還未有支出。</p> : (
               <div className="category-chart-layout">
-                <div className="category-donut" style={{ background: categoryChartBackground }} aria-label="分類支出圖表" />
+                <div className="category-donut" style={{ background: categoryChartBackground }} aria-label="??????">
+                  {categoryChartLabels.map((label) => (
+                    <span
+                      key={label.categoryId}
+                      className={`pie-percent-label ${label.percent < 6 ? 'is-small' : ''}`}
+                      style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                    >
+                      {label.percent}%
+                    </span>
+                  ))}
+                </div>
                 <div className="category-chart-list">
                   <div className="category-chart-total"><span>總額</span><strong>{formatMoney(myCategoryTotalAmount)}</strong></div>
                   {myCategoryTotals.map((item) => (
@@ -1730,20 +1755,46 @@ function App() {
                 </div>
               </div>
             )}
-            <label className="hero-input title-date-input">
-              項目
-              <div>
-                <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：麥當勞晚餐、車費、超市" />
-                <button type="button" onClick={() => expenseDateInputRef.current?.showPicker?.() ?? expenseDateInputRef.current?.click()} aria-label="選擇日期" title={form.date === todayInputValue() ? '今日' : form.date}>
-                  <CalendarDays size={18} />
-                </button>
-                <input ref={expenseDateInputRef} className="hidden-date-input" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} aria-label="支出日期" />
+            <section className="expense-entry-strip" aria-label="????">
+              <div className="expense-entry-main">
+                <div className="currency-amount-cell">
+                  <select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })} aria-label="??">
+                    {currencies.map((currency) => <option key={currency}>{currency}</option>)}
+                  </select>
+                  <input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" aria-label="??" />
+                </div>
+                <div className="title-note-cell">
+                  <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="????" aria-label="????" />
+                  <button type="button" onClick={() => expenseDateInputRef.current?.showPicker?.() ?? expenseDateInputRef.current?.click()} aria-label="????" title={form.date === todayInputValue() ? '??' : form.date}>
+                    <CalendarDays size={18} />
+                  </button>
+                  <input ref={expenseDateInputRef} className="hidden-date-input" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} aria-label="????" />
+                </div>
               </div>
-            </label>
-            <div className="amount-currency-row">
-              <label>金額<input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" /></label>
-              <label>貨幣<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })}>{currencies.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
-            </div>
+              {recentTemplates.length > 0 && (
+                <div className="expense-recent-strip" aria-label="??????">
+                  {recentTemplates.map((expense) => (
+                    <button
+                      key={expense.id}
+                      type="button"
+                      onClick={() => {
+                        setForm({
+                          ...form,
+                          title: expense.title,
+                          amount: String(expense.originalAmount),
+                          currency: expense.originalCurrency,
+                          categoryId: expense.categoryId,
+                          isShared: expense.isShared !== false,
+                        })
+                        setCalculator(null)
+                      }}
+                    >
+                      <span>{expense.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
             {calculator?.target === 'expense' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
             {form.currency !== 'HKD' && <label className="toggle-line"><input type="checkbox" checked={form.useManualRate} onChange={(event) => setForm({ ...form, useManualRate: event.target.checked })} />使用手動匯率</label>}
             {form.currency !== 'HKD' && form.useManualRate && <label>1 {form.currency} 等於多少 HKD<input type="number" min="0" step="0.0001" value={form.manualRate} onChange={(event) => setForm({ ...form, manualRate: event.target.value })} placeholder="例如：0.052" /></label>}
@@ -1802,6 +1853,17 @@ function App() {
 
       {activeTab === 'records' && (
         <section className="screen-stack">
+          <section className="contribution-card panel">
+            <div className="panel-title"><CircleDollarSign size={18} /><h2>雙方暫時支出比例</h2></div>
+            <div className="ratio-bar" aria-label="雙方共同帳簿支出比例">
+              <div className="ratio-a" style={{ width: `${personAPercentage}%` }}>{personAPercentage}%</div>
+              <div className="ratio-b" style={{ width: `${personBPercentage}%` }}>{personBPercentage}%</div>
+            </div>
+            <div className="ratio-details">
+              <div><span>{personA.name} 共同帳簿已付</span><strong>{formatMoney(settlement.paid.personA)}</strong></div>
+              <div><span>{personB.name} 共同帳簿已付</span><strong>{formatMoney(settlement.paid.personB)}</strong></div>
+            </div>
+          </section>
           <section className="panel fixed-expense-panel">
             <button
               type="button"
@@ -1873,7 +1935,16 @@ function App() {
                   <small>{formatMoney(expense.originalAmount, expense.originalCurrency)}{expense.originalCurrency !== 'HKD' ? ` · 匯率 ${expense.exchangeRateToHkd.toFixed(4)}` : ''}</small>
                   {(expense.photoDataUrl || expense.photoCaption || expense.notifyOther) && (
                     <div className="record-photo-story">
-                      {expense.photoDataUrl && <img src={expense.photoDataUrl} alt={`${expense.title} 支出照片`} />}
+                      {expense.photoDataUrl && (
+                        <button
+                          type="button"
+                          className="record-photo-button"
+                          onClick={() => setPhotoViewer({ src: expense.photoDataUrl ?? '', caption: expense.photoCaption || expense.title })}
+                          aria-label="????????"
+                        >
+                          <img src={expense.photoDataUrl} alt={`${expense.title} ????`} />
+                        </button>
+                      )}
                       <div>
                         {expense.photoCaption && <p>{expense.photoCaption}</p>}
                         {expense.notifyOther && <small><Mail size={13} />已標記通知對方</small>}
@@ -2122,13 +2193,24 @@ function App() {
           </form>
         </div>
       )}
+      {photoViewer && (
+        <div className="photo-viewer-backdrop" role="dialog" aria-modal="true" aria-label="檢視支出照片" onClick={() => setPhotoViewer(null)}>
+          <div className="photo-viewer" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="photo-viewer-close" onClick={() => setPhotoViewer(null)} aria-label="關閉照片">
+              <X size={22} />
+            </button>
+            <img src={photoViewer.src} alt={photoViewer.caption || '支出照片'} />
+            {photoViewer.caption && <p>{photoViewer.caption}</p>}
+          </div>
+        </div>
+      )}
 
       <nav className="bottom-nav" aria-label="底部導覽">
-        <button type="button" className={activeTab === 'overview' ? 'is-active' : ''} onClick={() => switchTab('overview')}><Home size={19} />總覽</button>
-        <button type="button" className={activeTab === 'add' ? 'is-active' : ''} onClick={() => switchTab('add')}><Plus size={19} />新增</button>
-        <button type="button" className={activeTab === 'records' ? 'is-active' : ''} onClick={() => switchTab('records')}><List size={19} />明細</button>
-        <button type="button" className={activeTab === 'categories' ? 'is-active' : ''} onClick={() => switchTab('categories')}><Coins size={19} />分類</button>
-        <button type="button" className={activeTab === 'settings' ? 'is-active' : ''} onClick={() => switchTab('settings')}><Settings size={19} />設定</button>
+        <button type="button" className={activeTab === 'overview' ? 'is-active' : ''} onClick={() => switchTab('overview')} aria-label="總覽"><Home size={21} /></button>
+        <button type="button" className={activeTab === 'records' ? 'is-active' : ''} onClick={() => switchTab('records')} aria-label="明細"><List size={21} /></button>
+        <button type="button" className={`nav-fab ${activeTab === 'add' ? 'is-active' : ''}`} onClick={() => switchTab('add')} aria-label="新增支出"><Plus size={28} /></button>
+        <button type="button" className={activeTab === 'categories' ? 'is-active' : ''} onClick={() => switchTab('categories')} aria-label="分類"><Coins size={21} /></button>
+        <button type="button" className={activeTab === 'settings' ? 'is-active' : ''} onClick={() => switchTab('settings')} aria-label="設定"><Settings size={21} /></button>
       </nav>
     </main>
   )
