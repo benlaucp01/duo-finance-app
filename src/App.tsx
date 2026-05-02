@@ -264,6 +264,11 @@ function App() {
   const [fixedAmount, setFixedAmount] = useState('')
   const [fixedCategoryId, setFixedCategoryId] = useState('rent')
   const [isFixedExpenseOpen, setIsFixedExpenseOpen] = useState(false)
+  const [isFixedCategoryPickerOpen, setIsFixedCategoryPickerOpen] = useState(false)
+  const [expandedFixedExpenseId, setExpandedFixedExpenseId] = useState<string | null>(null)
+  const [managingFixedExpenseId, setManagingFixedExpenseId] = useState<string | null>(null)
+  const [editingFixedExpenseId, setEditingFixedExpenseId] = useState<string | null>(null)
+  const [isExpenseDetailsOpen, setIsExpenseDetailsOpen] = useState(false)
   const [repeatDraft, setRepeatDraft] = useState<{ expense: Expense; amount: string } | null>(null)
   const [isRecentExpanded, setIsRecentExpanded] = useState(false)
   const [recordFilter, setRecordFilter] = useState<RecordFilter>('all')
@@ -643,6 +648,8 @@ function App() {
     setIsExpenseCategoryFormOpen(false)
     setIsCategoryMenuOpen(false)
     setEditingCategoryIconId(null)
+    setIsFixedCategoryPickerOpen(false)
+    setManagingFixedExpenseId(null)
     setCalculator(null)
   }
 
@@ -816,19 +823,22 @@ function App() {
     event.preventDefault()
     const amount = Number(fixedAmount)
     if (!fixedTitle.trim() || !amount || amount <= 0 || !currentProfile) return
-    setFixedExpenses((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        title: fixedTitle.trim(),
-        amount,
-        categoryId: fixedCategoryId,
-        payerId: currentProfile.id,
-        splitMode: 'equal',
-      },
-    ])
+    const nextTemplate = {
+      id: editingFixedExpenseId ?? crypto.randomUUID(),
+      title: fixedTitle.trim(),
+      amount,
+      categoryId: fixedCategoryId,
+      payerId: currentProfile.id,
+      splitMode: 'equal' as const,
+    }
+    setFixedExpenses((current) => editingFixedExpenseId
+      ? current.map((item) => item.id === editingFixedExpenseId ? nextTemplate : item)
+      : [...current, nextTemplate]
+    )
+    setEditingFixedExpenseId(null)
     setFixedTitle('')
     setFixedAmount('')
+    setIsFixedCategoryPickerOpen(false)
     setStatusMessage('固定支出已新增。')
   }
 
@@ -849,6 +859,23 @@ function App() {
 
   function deleteFixedExpense(templateId: string) {
     setFixedExpenses((current) => current.filter((template) => template.id !== templateId))
+    setManagingFixedExpenseId(null)
+    if (expandedFixedExpenseId === templateId) setExpandedFixedExpenseId(null)
+    if (editingFixedExpenseId === templateId) {
+      setEditingFixedExpenseId(null)
+      setFixedTitle('')
+      setFixedAmount('')
+    }
+  }
+
+  function editFixedExpense(template: FixedExpenseTemplate) {
+    setEditingFixedExpenseId(template.id)
+    setFixedTitle(template.title)
+    setFixedAmount(String(template.amount))
+    setFixedCategoryId(template.categoryId)
+    setIsFixedExpenseOpen(true)
+    setIsFixedCategoryPickerOpen(false)
+    setManagingFixedExpenseId(null)
   }
 
   async function autoApplyFixedExpenses(currentData: AppData, templates: FixedExpenseTemplate[]) {
@@ -1693,9 +1720,10 @@ function App() {
       )}
 
       {activeTab === 'add' && (
-        <section className="screen-stack">
+        <section className="screen-stack add-fullscreen">
           <form className="panel entry-panel" onSubmit={handleAddExpense}>
             <div className="panel-title"><Plus size={18} /><h2>{editingExpenseId ? '修改支出' : '新增支出'}</h2></div>
+            <button type="button" className="sheet-close-button" onClick={() => switchTab('overview')} aria-label="Close"><X size={18} /></button>
             <div className="payer-selector">
               <span><UserRound size={17} />入帳帳戶</span>
               <div>
@@ -1756,6 +1784,14 @@ function App() {
               </div>
             )}
             <section className="expense-entry-strip" aria-label="????">
+              <div className="expense-date-strip">
+                <button type="button" onClick={() => expenseDateInputRef.current?.showPicker?.() ?? expenseDateInputRef.current?.click()} aria-label="Date">
+                  <ChevronDown size={16} />
+                  <CalendarDays size={18} />
+                  <span>{form.date === todayInputValue() ? '今日' : form.date}</span>
+                  <ChevronDown size={16} />
+                </button>
+              </div>
               <div className="expense-entry-main">
                 <div className="currency-amount-cell">
                   <select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as CurrencyCode, useManualRate: event.target.value === 'HKD' ? false : form.useManualRate })} aria-label="??">
@@ -1796,6 +1832,41 @@ function App() {
               )}
             </section>
             {calculator?.target === 'expense' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
+            <section className={`expense-more-panel ${isExpenseDetailsOpen ? 'is-open' : ''}`}>
+              <button type="button" className="optional-toggle" onClick={() => setIsExpenseDetailsOpen((current) => !current)} aria-expanded={isExpenseDetailsOpen}>
+                <span><MoreVertical size={17} />更多資料</span>
+                <ChevronDown size={18} />
+              </button>
+              {isExpenseDetailsOpen && (
+                <div className="expense-more-body">
+                  <label>備註<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如：信用卡實際匯率、旅行地點等" /></label>
+                  <div className="expense-photo-body">
+                    <div className="photo-tool-row">
+                      <label className="photo-icon-button" aria-label="拍照">
+                        <Camera size={17} />
+                        <input type="file" accept="image/*" capture="environment" onChange={handleExpensePhotoChange} />
+                      </label>
+                      <label className="photo-icon-button" aria-label="選相">
+                        <ImageIcon size={16} />
+                        <input type="file" accept="image/*" onChange={handleExpensePhotoChange} />
+                      </label>
+                      <input className="photo-caption-inline" value={form.photoCaption} onChange={(event) => setForm({ ...form, photoCaption: event.target.value })} placeholder="相片留言" aria-label="相片留言" />
+                      <button type="button" className={`notify-icon-button ${form.notifyOther ? 'selected' : ''}`} onClick={() => setForm({ ...form, notifyOther: !form.notifyOther })} aria-label="通知另一位用戶">
+                        <Send size={17} />
+                      </button>
+                    </div>
+                    {form.photoDataUrl ? (
+                      <article className="photo-preview-card">
+                        <img src={form.photoDataUrl} alt="支出照片" />
+                        <button type="button" className="photo-remove-button" onClick={() => setForm({ ...form, photoDataUrl: '', photoCaption: '', notifyOther: false })} aria-label="移除照片">
+                          <X size={16} />
+                        </button>
+                      </article>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </section>
             {form.currency !== 'HKD' && <label className="toggle-line"><input type="checkbox" checked={form.useManualRate} onChange={(event) => setForm({ ...form, useManualRate: event.target.checked })} />使用手動匯率</label>}
             {form.currency !== 'HKD' && form.useManualRate && <label>1 {form.currency} 等於多少 HKD<input type="number" min="0" step="0.0001" value={form.manualRate} onChange={(event) => setForm({ ...form, manualRate: event.target.value })} placeholder="例如：0.052" /></label>}
             <label>備註<textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例如：信用卡實際匯率、旅行地點等" /></label>
@@ -1881,20 +1952,49 @@ function App() {
                   <input value={fixedTitle} onChange={(event) => setFixedTitle(event.target.value)} placeholder="例如：租金、上網費" />
                   <div className="amount-currency-row">
                     <input readOnly inputMode="none" value={fixedAmount} onFocus={() => openCalculator('fixed', fixedAmount)} onClick={() => openCalculator('fixed', fixedAmount)} placeholder="HK$ 金額" />
-                    <select value={fixedCategoryId} onChange={(event) => setFixedCategoryId(event.target.value)}>
-                      {appData.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                    </select>
+                    <button type="button" className="fixed-category-trigger" onClick={() => setIsFixedCategoryPickerOpen((current) => !current)} aria-label="選擇固定支出分類">
+                      <span className="category-icon" style={{ background: categoryMeta(fixedCategoryId)?.color ?? '#94a3b8' }}>
+                        <CategoryIcon category={categoryMeta(fixedCategoryId) ?? { id: fixedCategoryId, name: categoryName(fixedCategoryId), color: '', icon: fixedCategoryId }} />
+                      </span>
+                      <strong>{categoryName(fixedCategoryId)}</strong>
+                      <ChevronDown size={17} />
+                    </button>
                   </div>
+                  {isFixedCategoryPickerOpen && (
+                    <div className="fixed-category-picker" aria-label="固定支出分類">
+                      {appData.categories.map((category) => (
+                        <button key={category.id} type="button" className={fixedCategoryId === category.id ? 'selected' : ''} onClick={() => { setFixedCategoryId(category.id); setIsFixedCategoryPickerOpen(false) }}>
+                          <span className="category-icon" style={{ background: category.color }}><CategoryIcon category={category} /></span>
+                          <strong>{category.name}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {calculator?.target === 'fixed' && <CalculatorPadV2 expression={calculator.expression} onPress={handleCalculatorPress} />}
                   <button className="primary-action" type="submit"><Plus size={16} />新增固定支出</button>
                 </form>
                 <div className="fixed-expense-list">
                   {fixedExpenses.length === 0 ? <p className="empty-text">未有固定支出。</p> : fixedExpenses.map((template) => (
-                    <article key={template.id} className="fixed-expense-item">
-                      <span>{template.title}<small>{categoryName(template.categoryId)}</small></span>
-                      <b>{formatMoney(template.amount)}</b>
+                    <article key={template.id} className={`fixed-expense-item ${expandedFixedExpenseId === template.id ? 'is-open' : ''}`}>
+                      <button type="button" className="fixed-expense-summary" onClick={() => setExpandedFixedExpenseId((current) => current === template.id ? null : template.id)} aria-expanded={expandedFixedExpenseId === template.id}>
+                        <span>{template.title}<small>{categoryName(template.categoryId)}</small></span>
+                        <b>{formatMoney(template.amount)}</b>
+                        <ChevronDown size={17} />
+                      </button>
+                      {expandedFixedExpenseId === template.id && (
+                        <div className="fixed-expense-detail">
+                          <button type="button" className="fixed-expense-menu" onClick={() => setManagingFixedExpenseId((current) => current === template.id ? null : template.id)} aria-label="管理固定支出">
+                            <MoreVertical size={17} />
+                          </button>
                       <button type="button" onClick={() => void applyFixedExpense(template)}>加入本月</button>
-                      <button type="button" className="ghost-icon" onClick={() => deleteFixedExpense(template.id)}><Trash2 size={16} /></button>
+                          {managingFixedExpenseId === template.id && (
+                            <div className="fixed-expense-actions">
+                              <button type="button" onClick={() => editFixedExpense(template)}><Pencil size={15} />修改</button>
+                              <button type="button" onClick={() => deleteFixedExpense(template.id)}><Trash2 size={15} />刪除</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
