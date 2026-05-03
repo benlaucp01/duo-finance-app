@@ -1437,7 +1437,7 @@ function App() {
   }
 
   return (
-    <main className={`phone-shell theme-${theme}`} onTouchStart={handleShellTouchStart} onTouchMove={handleShellTouchMove} onTouchEnd={handleShellTouchEnd} onTouchCancel={handleShellTouchEnd}>
+    <main className={`phone-shell theme-${theme} tab-${activeTab}`} onTouchStart={handleShellTouchStart} onTouchMove={handleShellTouchMove} onTouchEnd={handleShellTouchEnd} onTouchCancel={handleShellTouchEnd}>
       <input ref={swipeCameraInputRef} className="sr-only-camera-input" type="file" accept="image/*" capture="environment" onChange={handleStoryPhotoChange} />
       <input ref={galleryInputRef} className="sr-only-camera-input" type="file" accept="image/*" onChange={handleStoryPhotoChange} />
       {cameraDrag.visible && (
@@ -1501,6 +1501,8 @@ function App() {
           </div>
         </div>
       )}
+      {activeTab !== 'add' && (
+        <>
       <header className="app-header">
         <div>
           <p className="muted-label">Hi, {currentProfile.name}</p>
@@ -1519,6 +1521,8 @@ function App() {
         </label>
         <button type="button" onClick={() => switchTab('add')} className="quick-add"><Plus size={18} />新增</button>
       </section>
+        </>
+      )}
 
       {activeTab === 'overview' && (
         <section className="screen-stack">
