@@ -627,6 +627,7 @@ function App() {
   }, [])
   const recentTemplates = [...appData.expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6)
   const visibleRecentTemplates = isRecentExpanded ? recentTemplates : recentTemplates.slice(0, 4)
+  const fixedExpenseRecordKeys = new Set(fixedExpenses.map((template) => `${template.title}|${template.categoryId}|${roundMoney(template.amount)}`))
   const recordExpenses = monthExpenses.filter((expense) => {
     const matchesPerson = recordFilter === 'all' || expense.payerId === recordFilter
     const matchesAccount =
@@ -634,6 +635,11 @@ function App() {
       || (recordAccountFilter === 'personal' && expense.isShared === false)
       || (recordAccountFilter === 'shared' && expense.isShared !== false)
     return matchesPerson && matchesAccount
+  }).sort((a, b) => {
+    const aFixed = fixedExpenseRecordKeys.has(`${a.title}|${a.categoryId}|${roundMoney(a.hkdAmount)}`)
+    const bFixed = fixedExpenseRecordKeys.has(`${b.title}|${b.categoryId}|${roundMoney(b.hkdAmount)}`)
+    if (aFixed !== bFixed) return aFixed ? -1 : 1
+    return b.createdAt.localeCompare(a.createdAt)
   })
   const recordTotal = roundMoney(recordExpenses.reduce((total, expense) => total + expense.hkdAmount, 0))
   const quickCategories = buildQuickCategories(appData.categories, appData.expenses, quickCategoryIds)
@@ -835,6 +841,17 @@ function App() {
       ? current.map((item) => item.id === editingFixedExpenseId ? nextTemplate : item)
       : [...current, nextTemplate]
     )
+    if (!editingFixedExpenseId) {
+      saveFixedExpenseApplied([
+        ...loadFixedExpenseApplied(),
+        fixedExpenseApplyKey(appData.household.id, nextTemplate.id, currentMonthInputValue()),
+      ])
+      void addQuickExpense(nextTemplate.title, nextTemplate.amount, nextTemplate.categoryId, undefined, {
+        date: firstDayOfMonth(month),
+        payerId: nextTemplate.payerId,
+        isShared: false,
+      })
+    }
     setEditingFixedExpenseId(null)
     setFixedTitle('')
     setFixedAmount('')
@@ -1804,7 +1821,7 @@ function App() {
                   <input readOnly inputMode="none" value={form.amount} onFocus={() => openCalculator('expense', form.amount)} onClick={() => openCalculator('expense', form.amount)} placeholder="0.00" aria-label="??" />
                 </div>
                 <div className="title-note-cell">
-                  <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="????" aria-label="????" />
+                  <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="items" aria-label="items" />
                   <button type="button" onClick={() => expenseDateInputRef.current?.showPicker?.() ?? expenseDateInputRef.current?.click()} aria-label="????" title={form.date === todayInputValue() ? '??' : form.date}>
                     <CalendarDays size={18} />
                   </button>

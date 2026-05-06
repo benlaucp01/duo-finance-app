@@ -1608,7 +1608,7 @@ textarea:focus {
 }
 
 .fixed-expense-list {
-  display: grid;
+  display: none;
   gap: 8px;
 }
 
@@ -4279,4 +4279,106 @@ textarea {
   color: var(--lime);
   cursor: pointer;
   font-weight: 900;
+}
+
+/* Flatten nested controls */
+.entry-panel .expense-entry-strip,
+.entry-panel .expense-more-panel,
+.fixed-expense-form,
+.fixed-expense-body {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.entry-panel .expense-entry-strip {
+  padding: 0;
+  gap: 12px;
+}
+
+.expense-entry-main {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.currency-amount-cell,
+.title-note-cell,
+.fixed-category-trigger {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.currency-amount-cell {
+  grid-template-columns: 74px minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+
+.title-note-cell input,
+.currency-amount-cell input,
+.currency-amount-cell select {
+  min-height: 48px;
+}
+
+.expense-more-panel {
+  margin-top: 18px;
+}
+
+.expense-more-panel .optional-toggle {
+  min-height: 48px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.expense-more-body {
+  padding: 10px 0 0;
+}
+
+.fixed-category-trigger {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 52px;
+  border-bottom: 1px solid var(--line);
+}
+
+.fixed-category-trigger .category-icon {
+  margin-left: 0;
+}
+
+.fixed-category-picker {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 0 8px;
+  scrollbar-width: none;
+}
+
+.fixed-category-picker::-webkit-scrollbar {
+  display: none;
+}
+
+.fixed-category-picker button {
+  flex: 0 0 70px;
+  min-height: 72px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.fixed-category-picker button.selected .category-icon {
+  outline: 2px solid var(--lime);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--lime) 13%, transparent);
+}
+
+.fixed-expense-form .amount-currency-row {
+  gap: 10px;
+}
+
+.fixed-expense-form .amount-currency-row input {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
